@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Reproducible R Notebook</title>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Font Awesome for icons -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+  </head>
+  <body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+      <div class="container">
+        <div class="navbar-brand">
+          <i class="fas fa-notebook"></i>
+          <span>R Notebook</span>
+        </div>
+
+        <div class="navbar-nav">
+          <a href="#" class="nav-link active">Home</a>
+          <a href="#" class="nav-link">Notebooks</a>
+          <a href="#" class="nav-link">Help</a>
+          <div class="nav-user">
+            <i class="fas fa-user-circle"></i>
+            <span>John Doe</span>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Notebook Editor -->
+      <div class="notebook-editor">
+        <!-- Editor Header -->
+        <div class="editor-header">
+          <div class="title-section">
+            <input
+              type="text"
+              class="notebook-title"
+              value="My First R Notebook"
+              placeholder="Untitled Notebook"
+            />
+            <span class="author-info"
+              >by John Doe • Last edited 2 hours ago</span
+            >
+          </div>
+
+          <div class="editor-actions">
+            <button class="btn btn-secondary">
+              <i class="fas fa-code"></i>
+              Add Code
+            </button>
+            <button class="btn btn-outline">
+              <i class="fas fa-paragraph"></i>
+              Add Text
+            </button>
+            <button class="btn btn-success">
+              <i class="fas fa-play"></i>
+              Run All
+            </button>
+            <button class="btn btn-primary">
+              <i class="fas fa-save"></i>
+              Save
+            </button>
+          </div>
+        </div>
+
+        <!-- Notebook Blocks -->
+        <div class="notebook-blocks">
+          <!-- Code Block -->
+          <div class="notebook-block block-code">
+            <div class="block-header">
+              <div class="block-info">
+                <span class="block-type">R Code</span>
+                <span class="block-number">[1]</span>
+              </div>
+              <div class="block-actions">
+                <button class="btn-icon" title="Run block">
+                  <i class="fas fa-play"></i>
+                </button>
+                <button class="btn-icon" title="Move up">
+                  <i class="fas fa-arrow-up"></i>
+                </button>
+                <button class="btn-icon" title="Move down">
+                  <i class="fas fa-arrow-down"></i>
+                </button>
+                <button class="btn-icon btn-danger" title="Delete block">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+            </div>
+
+            <div class="block-content">
+              <textarea
+                class="code-editor"
+                rows="8"
+                placeholder="Enter R code here..."
+              >
+# Load required libraries
+library(ggplot2)
+library(dplyr)
+
+# Create sample data
+data <- data.frame(
+  x = 1:10,
+  y = rnorm(10, mean = 5, sd = 2)
+)
+
+# Create a simple plot
+ggplot(data, aes(x = x, y = y)) +
+  geom_point() +
+  theme_minimal()
+                        </textarea
+              >
+            </div>
+
+            <div class="block-output">
+              <div class="output-header">
+                <span>Output</span>
+                <div class="output-actions">
+                  <button class="btn-icon" title="Copy output">
+                    <i class="fas fa-copy"></i>
+                  </button>
+                  <button class="btn-icon" title="Clear output">
+                    <i class="fas fa-times"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="output-content">
+                <pre class="output-text">
+# Loading required package: ggplot2
+# Loading required package: dplyr
+# 
+# Attaching package: 'dplyr'
+# 
+# The following objects are masked from 'package:stats':
+# 
+#     filter, lag
+# 
+# The following objects are masked from 'package:base':
+# 
+#     intersect, setdiff, setequal, union</pre
+                >
+
+                <div class="output-plot">
+                  <div class="plot-placeholder">
+                    <i class="fas fa-chart-scatter"></i>
+                    <span>Plot generated successfully</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Add Block Button -->
+          <div class="add-block-section">
+            <button class="btn-add-block">
+              <i class="fas fa-plus"></i>
+              Add Block
+            </button>
+            <div class="add-block-options">
+              <button class="btn btn-sm">
+                <i class="fas fa-code"></i>
+                Code
+              </button>
+              <button class="btn btn-sm">
+                <i class="fas fa-paragraph"></i>
+                Text
+              </button>
+            </div>
+          </div>
+
+          <!-- Markdown Block -->
+          <div class="notebook-block block-markdown">
+            <div class="block-header">
+              <div class="block-info">
+                <span class="block-type">Markdown</span>
+              </div>
+              <div class="block-actions">
+                <button class="btn-icon" title="Preview">
+                  <i class="fas fa-eye"></i>
+                </button>
+                <button class="btn-icon" title="Move up">
+                  <i class="fas fa-arrow-up"></i>
+                </button>
+                <button class="btn-icon" title="Move down">
+                  <i class="fas fa-arrow-down"></i>
+                </button>
+                <button class="btn-icon btn-danger" title="Delete block">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+            </div>
+
+            <div class="block-content">
+              <textarea
+                class="markdown-editor"
+                rows="5"
+                placeholder="Enter markdown text..."
+              >
+## Data Analysis Results
+
+This plot shows the relationship between our **x** and **y** variables. 
+
+Key observations:
+- The data points show some variation around the mean
+- No clear linear trend is visible
+- Further analysis may be needed
+
+*Next steps: Apply regression analysis*
+                        </textarea
+              >
+            </div>
+          </div>
+
+          <!-- Another Code Block -->
+          <div class="notebook-block block-code">
+            <div class="block-header">
+              <div class="block-info">
+                <span class="block-type">R Code</span>
+                <span class="block-number">[2]</span>
+                <span class="execution-status status-running">
+                  <i class="fas fa-spinner fa-spin"></i>
+                  Running...
+                </span>
+              </div>
+              <div class="block-actions">
+                <button class="btn-icon" disabled>
+                  <i class="fas fa-stop"></i>
+                </button>
+                <button class="btn-icon" title="Move up">
+                  <i class="fas fa-arrow-up"></i>
+                </button>
+                <button class="btn-icon" title="Move down">
+                  <i class="fas fa-arrow-down"></i>
+                </button>
+                <button class="btn-icon btn-danger" title="Delete block">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+            </div>
+
+            <div class="block-content">
+              <textarea class="code-editor" rows="4">
+# Perform linear regression
+model <- lm(y ~ x, data = data)
+summary(model)
+                        </textarea
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Sidebar for Reproducibility Analysis -->
+    <aside class="sidebar">
+      <div class="sidebar-section">
+        <h3>
+          <i class="fas fa-check-circle"></i>
+          Reproducibility Status
+        </h3>
+
+        <div class="status-card status-good">
+          <div class="status-header">
+            <i class="fas fa-shield-alt"></i>
+            <span>Good</span>
+            <span class="status-score">85%</span>
+          </div>
+          <p>Your notebook follows most reproducibility best practices.</p>
+        </div>
+
+        <div class="checks-list">
+          <div class="check-item check-pass">
+            <i class="fas fa-check"></i>
+            <span>Random seed set</span>
+          </div>
+          <div class="check-item check-pass">
+            <i class="fas fa-check"></i>
+            <span>Libraries loaded</span>
+          </div>
+          <div class="check-item check-warning">
+            <i class="fas fa-exclamation-triangle"></i>
+            <span>External data sources</span>
+          </div>
+          <div class="check-item check-pass">
+            <i class="fas fa-check"></i>
+            <span>No hardcoded paths</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <h3>
+          <i class="fas fa-cogs"></i>
+          R4R Analysis
+        </h3>
+
+        <div class="r4r-status">
+          <div class="r4r-item">
+            <span class="r4r-label">Dependencies:</span>
+            <span class="r4r-value">5 packages</span>
+          </div>
+          <div class="r4r-item">
+            <span class="r4r-label">System libs:</span>
+            <span class="r4r-value">3 detected</span>
+          </div>
+          <div class="r4r-item">
+            <span class="r4r-label">Docker ready:</span>
+            <span class="r4r-value status-ready">Yes</span>
+          </div>
+        </div>
+
+        <button class="btn btn-primary btn-full">
+          <i class="fas fa-download"></i>
+          Generate Environment
+        </button>
+      </div>
+
+      <div class="sidebar-section">
+        <h3>
+          <i class="fas fa-share-alt"></i>
+          Export & Share
+        </h3>
+
+        <div class="export-options">
+          <button class="btn btn-outline btn-sm">
+            <i class="fas fa-file-code"></i>
+            R Markdown
+          </button>
+          <button class="btn btn-outline btn-sm">
+            <i class="fas fa-file-pdf"></i>
+            PDF
+          </button>
+          <button class="btn btn-outline btn-sm">
+            <i class="fas fa-globe"></i>
+            HTML
+          </button>
+          <button class="btn btn-outline btn-sm">
+            <i class="fab fa-docker"></i>
+            Docker
+          </button>
+        </div>
+      </div>
+    </aside>
+  </body>
+</html>
