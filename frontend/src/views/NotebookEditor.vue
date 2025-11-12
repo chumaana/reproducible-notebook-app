@@ -1,6 +1,8 @@
 <template>
     <div class="main-content">
+        <!-- Notebook Editor -->
         <div class="notebook-editor">
+            <!-- Editor Header -->
             <div class="editor-header">
                 <div class="title-section">
                     <input v-model="notebook.title" @blur="saveNotebook" class="notebook-title"
@@ -32,6 +34,23 @@
 
             <!-- Notebook Blocks -->
             <div class="notebook-blocks">
+                <!-- Empty State -->
+                <div v-if="!notebook.blocks || notebook.blocks.length === 0" class="empty-notebook">
+                    <h3>Start your notebook</h3>
+                    <p>Add your first block to get started</p>
+                    <div class="empty-actions">
+                        <button @click="addBlock('code')" class="btn btn-primary btn-lg">
+                            <i class="fas fa-code"></i>
+                            Add Code Block
+                        </button>
+                        <button @click="addBlock('markdown')" class="btn btn-secondary btn-lg">
+                            <i class="fas fa-paragraph"></i>
+                            Add Text Block
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Blocks List -->
                 <div v-for="(block, index) in notebook.blocks" :key="block.id" class="notebook-block"
                     :class="{ 'block-code': block.block_type === 'code', 'block-markdown': block.block_type === 'markdown' }">
                     <!-- Block Header -->
@@ -67,6 +86,7 @@
                         </div>
                     </div>
 
+                    <!-- Block Content -->
                     <div class="block-content">
                         <textarea v-model="block.content" @blur="updateBlock(block)"
                             :class="block.block_type === 'code' ? 'code-editor' : 'markdown-editor'"
@@ -74,6 +94,7 @@
                             rows="8"></textarea>
                     </div>
 
+                    <!-- Block Output (for code blocks) -->
                     <div v-if="block.block_type === 'code' && block.output" class="block-output">
                         <div class="output-header">
                             <span>Output</span>
@@ -92,7 +113,8 @@
                     </div>
                 </div>
 
-                <div class="add-block-section">
+                <!-- Add Block Section -->
+                <div class="add-block-section" v-if="notebook.blocks && notebook.blocks.length > 0">
                     <button class="btn-add-block">
                         <i class="fas fa-plus"></i>
                         Add Block
@@ -108,24 +130,10 @@
                         </button>
                     </div>
                 </div>
-
-                <div v-if="!notebook.blocks || notebook.blocks.length === 0" class="empty-notebook">
-                    <h3>Start your notebook</h3>
-                    <p>Add your first block to get started</p>
-                    <div class="empty-actions">
-                        <button @click="addBlock('code')" class="btn btn-primary btn-lg">
-                            <i class="fas fa-code"></i>
-                            Add Code Block
-                        </button>
-                        <button @click="addBlock('markdown')" class="btn btn-secondary btn-lg">
-                            <i class="fas fa-paragraph"></i>
-                            Add Text Block
-                        </button>
-                    </div>
-                </div>
             </div>
         </div>
 
+        <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-section">
                 <h3>
@@ -216,6 +224,7 @@
             </div>
         </aside>
 
+        <!-- Loading Overlay -->
         <div v-if="loading" class="loading-overlay">
             <div class="spinner"></div>
             <p>Loading notebook...</p>
@@ -253,29 +262,55 @@ const formattedDate = computed(() => {
 const loadNotebook = async () => {
     const notebookId = route.params.id as string
 
-    if (notebookId && notebookId !== 'new') {
-        loading.value = true
-        try {
-            notebook.value = await api.getNotebook(notebookId)
-        } catch (error) {
-            console.error('Error loading notebook:', error)
-            await createNotebook()
-        }
-        loading.value = false
-    } else {
+    console.log('Loading notebook:', notebookId)
+
+    if (!notebookId || notebookId === 'new') {
+        console.log('Creating new notebook')
         await createNotebook()
+        return
+    }
+
+    loading.value = true
+    try {
+        console.log('Fetching notebook from API...')
+        const data = await api.getNotebook(notebookId)
+        console.log('Notebook loaded:', data)
+
+        notebook.value = data
+
+        if (!notebook.value.blocks) {
+            notebook.value.blocks = []
+        }
+
+        console.log('Total blocks:', notebook.value.blocks.length)
+    } catch (error) {
+        console.error('Error loading notebook:', error)
+        alert('Failed to load notebook')
+    } finally {
+        loading.value = false
     }
 }
 
 const createNotebook = async () => {
+    loading.value = true
     try {
+        console.log('Creating new notebook...')
         const newNotebook = await api.createNotebook({
-            title: notebook.value.title
+            title: 'Untitled Notebook'
         })
+        console.log('Notebook created:', newNotebook)
         notebook.value = newNotebook
+
+        if (!notebook.value.blocks) {
+            notebook.value.blocks = []
+        }
+
         router.replace(`/notebook/${newNotebook.id}`)
     } catch (error) {
         console.error('Error creating notebook:', error)
+        alert('Failed to create notebook')
+    } finally {
+        loading.value = false
     }
 }
 
@@ -286,37 +321,56 @@ const saveNotebook = async () => {
         await api.updateNotebook(notebook.value.id, {
             title: notebook.value.title
         })
+        console.log('Notebook saved')
     } catch (error) {
         console.error('Error saving notebook:', error)
     }
 }
 
 const addBlock = async (blockType: 'code' | 'markdown') => {
-    if (!notebook.value.id) return
+    if (!notebook.value.id) {
+        console.error('No notebook ID')
+        alert('Please wait for notebook to load')
+        return
+    }
 
     try {
-        const response = await fetch(`http://localhost:8000/api/notebooks/${notebook.value.id}/add_block/`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ block_type: blockType })
-        })
+        console.log(`Adding ${blockType} block...`)
+
+        const response = await fetch(
+            `http://localhost:8000/api/notebooks/${notebook.value.id}/add_block/`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ block_type: blockType })
+            }
+        )
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`)
+        }
 
         const newBlock = await response.json()
-        if (notebook.value.blocks) {
-            notebook.value.blocks.push(newBlock)
-        } else {
-            notebook.value.blocks = [newBlock]
+        console.log('Block created:', newBlock)
+
+        if (!notebook.value.blocks) {
+            notebook.value.blocks = []
         }
+        notebook.value.blocks.push(newBlock)
+
     } catch (error) {
         console.error('Error adding block:', error)
+        alert('Failed to add block')
     }
 }
 
 const updateBlock = async (block: NotebookBlock) => {
+    if (!block.id) return
+
     try {
-        await api.updateBlock(block.id!, { content: block.content })
+        await api.updateBlock(block.id, { content: block.content })
     } catch (error) {
         console.error('Error updating block:', error)
     }
@@ -327,13 +381,16 @@ const executeBlock = async (block: NotebookBlock & { executing?: boolean }) => {
 
     block.executing = true
     try {
-        const response = await fetch(`http://localhost:8000/api/notebooks/${notebook.value.id}/execute_block/`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ block_id: block.id })
-        })
+        const response = await fetch(
+            `http://localhost:8000/api/notebooks/${notebook.value.id}/execute_block/`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ block_id: block.id })
+            }
+        )
 
         const updatedBlock = await response.json()
 
@@ -373,24 +430,36 @@ const deleteBlock = async (blockId: string) => {
 }
 
 const moveBlock = async (index: number, direction: number) => {
-    if (!notebook.value.blocks) return
+    // Type guard
+    const blocks = notebook.value.blocks
+    if (!blocks || blocks.length === 0) return
 
     const newIndex = index + direction
-    if (newIndex >= 0 && newIndex < notebook.value.blocks.length) {
-        const blocks = [...notebook.value.blocks]
-        const temp = blocks[index]
-        blocks[index] = blocks[newIndex]
-        blocks[newIndex] = temp
+    if (newIndex < 0 || newIndex >= blocks.length) return
 
-        blocks[index].order = index
-        blocks[newIndex].order = newIndex
+    // TypeScript now knows blocks is defined
+    const blockA = blocks[index]
+    const blockB = blocks[newIndex]
 
-        notebook.value.blocks = blocks
+    if (!blockA || !blockB) return
 
-        await updateBlock(blocks[index])
-        await updateBlock(blocks[newIndex])
-    }
+    // Create new array
+    const newBlocks = [...blocks]
+    newBlocks[index] = blockB
+    newBlocks[newIndex] = blockA
+
+    // Update orders
+    blockA.order = newIndex
+    blockB.order = index
+
+    // Assign back
+    notebook.value.blocks = newBlocks
+
+    // Save
+    await updateBlock(blockA)
+    await updateBlock(blockB)
 }
+
 
 onMounted(() => {
     loadNotebook()
@@ -639,6 +708,11 @@ onMounted(() => {
     display: flex;
     gap: var(--space-4);
     justify-content: center;
+}
+
+.btn-lg {
+    padding: var(--space-4) var(--space-6);
+    font-size: 1rem;
 }
 
 .sidebar {
