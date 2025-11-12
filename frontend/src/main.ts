@@ -1,15 +1,29 @@
+import { createApp } from 'vue'
+import { createRouter, createWebHistory } from 'vue-router'
+import App from './App.vue'
+
+// Import Font Awesome CSS - CRITICAL
+import '@fortawesome/fontawesome-free/css/all.css'
+
+// Import your routes/views
+import Home from './views/HomeView.vue'
+import NotebookList from './views/NotebookList.vue'
+import NotebookEditor from './views/NotebookEditor.vue'
+
+// Import global styles (if you have them)
 import './assets/main.css'
 
-import { createApp } from 'vue'
-import { createPinia } from 'pinia'
+const routes = [
+  { path: '/', component: Home },
+  { path: '/notebooks', component: NotebookList },
+  { path: '/notebook/:id', component: NotebookEditor },
+]
 
-import App from './App.vue'
-import router from './router'
+const router = createRouter({
+  history: createWebHistory(),
+  routes,
+})
 
-import './styles/main.scss'
 const app = createApp(App)
-
-app.use(createPinia())
 app.use(router)
-
 app.mount('#app')
