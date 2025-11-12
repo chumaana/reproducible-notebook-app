@@ -10,6 +10,7 @@ export interface Notebook {
   created_at?: string
   updated_at?: string
   is_public?: boolean
+  blocks?: NotebookBlock[]
 }
 
 export interface NotebookBlock {
@@ -21,6 +22,7 @@ export interface NotebookBlock {
   output?: string
   created_at?: string
   updated_at?: string
+  executing?: boolean
 }
 
 export interface ApiError {
@@ -41,16 +43,13 @@ class ApiService {
       withCredentials: true,
     })
 
-    // Request interceptor
     this.client.interceptors.request.use(
       (config) => {
-        // Add auth token here if needed
         return config
       },
       (error) => Promise.reject(error),
     )
 
-    // Response interceptor
     this.client.interceptors.response.use(
       (response) => response,
       (error) => {
@@ -91,6 +90,16 @@ class ApiService {
   async executeNotebook(id: string): Promise<any> {
     const response = await this.client.post(`/notebooks/${id}/execute/`)
     return response.data
+  }
+
+  // Block methods
+  async updateBlock(id: string, block: Partial<NotebookBlock>): Promise<NotebookBlock> {
+    const response = await this.client.patch<NotebookBlock>(`/blocks/${id}/`, block)
+    return response.data
+  }
+
+  async deleteBlock(id: string): Promise<void> {
+    await this.client.delete(`/blocks/${id}/`)
   }
 }
 
