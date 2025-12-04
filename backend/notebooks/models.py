@@ -4,55 +4,36 @@ from django.contrib.auth.models import User
 
 
 class Notebook(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    title = models.CharField(max_length=200, default="Untitled Notebook")
-    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notebooks")
+    """A complete R Markdown document"""
+
+    title = models.CharField(max_length=200)
+    author = models.ForeignKey(User, on_delete=models.CASCADE)
+
+    # Single field for entire R Markdown content
+    content = models.TextField(blank=True, default="")
+
+    # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_public = models.BooleanField(default=False)
-    description = models.TextField(blank=True)
 
     def __str__(self):
         return self.title
 
-    class Meta:
-        ordering = ["-updated_at"]
 
+class Execution(models.Model):
+    """Record of notebook execution"""
 
-class NotebookBlock(models.Model):
-    BLOCK_TYPES = [
-        ("code", "Code Block"),
-        ("markdown", "Markdown Block"),
-    ]
+    notebook = models.ForeignKey(Notebook, on_delete=models.CASCADE)
 
-    EXECUTION_STATUS = [
-        ("idle", "Idle"),
-        ("running", "Running"),
-        ("completed", "Completed"),
-        ("failed", "Failed"),
-    ]
+    # Output from rendering
+    html_output = models.TextField()
+    status = models.CharField(max_length=20)  # 'running', 'completed', 'failed'
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    notebook = models.ForeignKey(
-        Notebook, on_delete=models.CASCADE, related_name="blocks"
-    )
-    block_type = models.CharField(max_length=20, choices=BLOCK_TYPES, default="code")
-    content = models.TextField(blank=True)
-    order = models.PositiveIntegerField(default=0)
-    output = models.TextField(blank=True)
-    error_output = models.TextField(blank=True)
-    execution_status = models.CharField(
-        max_length=20, choices=EXECUTION_STATUS, default="idle"
-    )
-    execution_time = models.FloatField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    started_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
 
-    class Meta:
-        ordering = ["order"]
-
-    def __str__(self):
-        return f"{self.notebook.title} - {self.block_type} - {self.order}"
+    error_message = models.TextField(blank=True)
 
 
 class NotebookExecution(models.Model):
@@ -63,7 +44,6 @@ class NotebookExecution(models.Model):
         ("failed", "Failed"),
     ]
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     notebook = models.ForeignKey(
         Notebook, on_delete=models.CASCADE, related_name="executions"
     )
@@ -85,28 +65,14 @@ class NotebookExecution(models.Model):
 
 
 class ReproducibilityAnalysis(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    notebook = models.ForeignKey(
-        Notebook, on_delete=models.CASCADE, related_name="analyses"
+    notebook = models.OneToOneField(
+        Notebook, on_delete=models.CASCADE, related_name="analysis"
     )
-    has_random_seed = models.BooleanField(default=False)
-    has_hardcoded_paths = models.BooleanField(default=False)
-    has_external_deps = models.BooleanField(default=False)
-    has_time_deps = models.BooleanField(default=False)
-    has_interactive_input = models.BooleanField(default=False)
-
-    # R4R analysis results
-    r4r_dependencies = models.JSONField(default=list, blank=True)
-    r4r_system_packages = models.JSONField(default=list, blank=True)
-    r4r_docker_ready = models.BooleanField(default=False)
-    r4r_reproducibility_score = models.FloatField(default=0.0)
+    r4r_score = models.IntegerField(default=0)
+    dependencies = models.JSONField(default=list)
+    system_deps = models.JSONField(default=list)
+    dockerfile = models.TextField(blank=True, default="")
+    makefile = models.TextField(blank=True, default="")
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ["-created_at"]
-        verbose_name_plural = "Reproducibility Analyses"
-
-    def __str__(self):
-        return f"{self.notebook.title} - Analysis - {self.created_at}"
