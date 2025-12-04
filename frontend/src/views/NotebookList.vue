@@ -53,8 +53,7 @@
 
                         <div class="notebook-stats">
                             <span class="stat-item">
-                                <i class="fas fa-code"></i>
-                                {{ notebook.blocks?.length || 0 }} blocks
+
                             </span>
                         </div>
                     </div>

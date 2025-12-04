@@ -1,465 +1,431 @@
 <template>
-    <div class="main-content">
-        <!-- Notebook Editor -->
-        <div class="notebook-editor">
-            <!-- Editor Header -->
-            <div class="editor-header">
-                <div class="title-section">
-                    <input v-model="notebook.title" @blur="saveNotebook" class="notebook-title"
-                        placeholder="Untitled Notebook">
-                    <span class="author-info" v-if="notebook.author">
-                        by {{ notebook.author }} • Last edited {{ formattedDate }}
-                    </span>
-                </div>
+    <div class="notebook-editor">
+        <!-- Header -->
+        <div class="editor-header">
+            <input v-model="notebookTitle" @blur="updateTitle" class="notebook-title" placeholder="Untitled Notebook">
 
-                <div class="editor-actions">
-                    <button @click="addBlock('code')" class="btn btn-secondary">
-                        <i class="fas fa-code"></i>
-                        Add Code
-                    </button>
-                    <button @click="addBlock('markdown')" class="btn btn-outline">
-                        <i class="fas fa-paragraph"></i>
-                        Add Text
-                    </button>
-                    <button @click="executeAll" class="btn btn-success" :disabled="executing">
-                        <i class="fas fa-play"></i>
-                        {{ executing ? 'Running...' : 'Run All' }}
-                    </button>
-                    <button @click="saveNotebook" class="btn btn-primary">
-                        <i class="fas fa-save"></i>
-                        Save
-                    </button>
+            <div class="editor-actions">
+                <button @click="saveNotebook" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Save
+                </button>
+                <button @click="executeNotebook" class="btn btn-success" :disabled="executing">
+                    <i class="fas fa-play"></i> {{ executing ? 'Running...' : 'Run' }}
+                </button>
+                <button @click="toggleAnalysis" class="btn btn-secondary" :disabled="!notebook.id">
+                    <i class="fas fa-chart-bar"></i> Analysis
+                </button>
+                <button @click="downloadRmd" class="btn btn-outline">
+                    <i class="fas fa-download"></i> Download .Rmd
+                </button>
+            </div>
+        </div>
+
+        <!-- Split View: Editor | Output (like Overleaf) -->
+        <div class="editor-split-view">
+            <!-- Left: Editor -->
+            <div class="editor-pane">
+                <div class="pane-header">
+                    <h3><i class="fas fa-code"></i> Editor</h3>
+                    <div class="editor-status">
+                        <span v-if="warnings.length > 0" class="warning-badge">
+                            <i class="fas fa-exclamation-triangle"></i> {{ warnings.length }} warnings
+                        </span>
+                    </div>
                 </div>
+                <textarea ref="editorTextarea" v-model="cleanContent" @input="debouncedSave" @scroll="onEditorScroll"
+                    class="rmarkdown-editor" :placeholder="placeholderText"
+                    :class="{ 'has-warnings': warnings.length > 0 }"></textarea>
             </div>
 
-            <!-- Notebook Blocks -->
-            <div class="notebook-blocks">
-                <!-- Empty State -->
-                <div v-if="!notebook.blocks || notebook.blocks.length === 0" class="empty-notebook">
-                    <h3>Start your notebook</h3>
-                    <p>Add your first block to get started</p>
-                    <div class="empty-actions">
-                        <button @click="addBlock('code')" class="btn btn-primary btn-lg">
-                            <i class="fas fa-code"></i>
-                            Add Code Block
-                        </button>
-                        <button @click="addBlock('markdown')" class="btn btn-secondary btn-lg">
-                            <i class="fas fa-paragraph"></i>
-                            Add Text Block
-                        </button>
+            <!-- Resize Handle -->
+            <div class="resize-handle" @mousedown="startResize"></div>
+
+            <!-- Right: Output -->
+            <div class="output-pane">
+                <div class="pane-header">
+                    <h3><i class="fas fa-file-alt"></i> Output</h3>
+                    <div class="output-status">
+                        <span v-if="executing" class="status-running">
+                            <i class="fas fa-spinner fa-spin"></i> Running...
+                        </span>
+                        <span v-else-if="executionResult" class="status-success">
+                            <i class="fas fa-check-circle"></i> Ready
+                        </span>
+                        <span v-else class="status-empty">
+                            <i class="fas fa-info-circle"></i> Run to see output
+                        </span>
                     </div>
                 </div>
 
-                <!-- Blocks List -->
-                <div v-for="(block, index) in notebook.blocks" :key="block.id" class="notebook-block"
-                    :class="{ 'block-code': block.block_type === 'code', 'block-markdown': block.block_type === 'markdown' }">
-                    <!-- Block Header -->
-                    <div class="block-header">
-                        <div class="block-info">
-                            <span class="block-type">
-                                {{ block.block_type === 'code' ? 'R Code' : 'Markdown' }}
-                            </span>
-                            <span class="block-number" v-if="block.block_type === 'code'">
-                                [{{ index + 1 }}]
-                            </span>
-                            <span v-if="block.executing" class="execution-status status-running">
-                                <i class="fas fa-spinner fa-spin"></i>
-                                Running...
-                            </span>
-                        </div>
-                        <div class="block-actions">
-                            <button v-if="block.block_type === 'code'" @click="executeBlock(block)" class="btn-icon"
-                                :disabled="block.executing" title="Run block">
-                                <i class="fas fa-play"></i>
-                            </button>
-                            <button @click="moveBlock(index, -1)" :disabled="index === 0" class="btn-icon"
-                                title="Move up">
-                                <i class="fas fa-arrow-up"></i>
-                            </button>
-                            <button @click="moveBlock(index, 1)" :disabled="index === notebook.blocks.length - 1"
-                                class="btn-icon" title="Move down">
-                                <i class="fas fa-arrow-down"></i>
-                            </button>
-                            <button @click="deleteBlock(block.id!)" class="btn-icon btn-danger" title="Delete block">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </div>
+                <div v-if="executionResult" class="output-content">
+                    <iframe :srcdoc="executionResult" class="output-iframe"></iframe>
+                </div>
+
+                <div v-else class="output-empty">
+                    <i class="fas fa-play-circle"></i>
+                    <p>Click "Run" to execute your notebook</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analysis Modal -->
+        <Transition name="modal">
+            <div v-if="showAnalysis && analysis" class="modal-overlay" @click="showAnalysis = false">
+                <div class="modal-container" @click.stop>
+                    <div class="modal-header">
+                        <h3><i class="fas fa-chart-bar"></i> R4R Analysis</h3>
+                        <button @click="showAnalysis = false" class="modal-close" aria-label="Close">
+                            <i class="fas fa-times"></i>
+                        </button>
                     </div>
 
-                    <!-- Block Content -->
-                    <div class="block-content">
-                        <textarea v-model="block.content" @blur="updateBlock(block)"
-                            :class="block.block_type === 'code' ? 'code-editor' : 'markdown-editor'"
-                            :placeholder="block.block_type === 'code' ? 'Enter R code...' : 'Enter markdown text...'"
-                            rows="8"></textarea>
-                    </div>
+                    <div class="modal-body">
+                        <div class="analysis-item">
+                            <span class="label">R4R Score:</span>
+                            <span class="value score-badge">{{ analysis.r4r_score || 0 }}%</span>
+                        </div>
 
-                    <!-- Block Output (for code blocks) -->
-                    <div v-if="block.block_type === 'code' && block.output" class="block-output">
-                        <div class="output-header">
-                            <span>Output</span>
-                            <div class="output-actions">
-                                <button class="btn-icon" title="Copy output">
-                                    <i class="fas fa-copy"></i>
+                        <div class="analysis-item">
+                            <span class="label">Dependencies:</span>
+                            <span class="value">{{ (analysis.dependencies || []).length }} packages</span>
+                        </div>
+
+                        <div v-if="warnings.length > 0" class="warning-section">
+                            <h4><i class="fas fa-exclamation-triangle text-warning"></i> Non-determinism Risks</h4>
+                            <div class="warning-list">
+                                <div v-for="warning in warnings.slice(0, 5)" :key="warning.line" class="warning-item">
+                                    <i class="fas fa-bug text-warning"></i>
+                                    <span class="warning-text">{{ warning.message }} (line {{ warning.line }})</span>
+                                </div>
+                                <div v-if="warnings.length > 5" class="warning-more">
+                                    +{{ warnings.length - 5 }} more warnings
+                                </div>
+                            </div>
+                        </div>
+
+                        <div v-if="analysis.environments" class="comparison-section">
+                            <h4><i class="fas fa-sync-alt"></i> Environment Diff</h4>
+                            <div class="env-grid">
+                                <div class="env-item" v-for="env in analysis.environments.slice(0, 2)" :key="env.name">
+                                    <div class="env-name">{{ env.name }}</div>
+                                    <div class="env-diff">{{ env.diff_score }}% match</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div v-if="(analysis.dependencies || []).length > 0" class="section">
+                            <h4>R Packages</h4>
+                            <ul class="dependency-list">
+                                <li v-for="dep in (analysis.dependencies || [])" :key="dep">
+                                    <i class="fas fa-cube"></i> {{ dep }}
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div class="action-section">
+                            <h4><i class="fas fa-tools"></i> Quick Actions</h4>
+                            <div class="action-buttons">
+                                <button @click="generateDockerfile" class="btn btn-sm btn-secondary"
+                                    :disabled="!analysis.dockerfile">
+                                    Generate Reproducible Package
                                 </button>
-                                <button @click="block.output = ''" class="btn-icon" title="Clear output">
-                                    <i class="fas fa-times"></i>
+
+                                <button @click="shareReproducibility" class="btn btn-sm btn-outline">
+                                    <i class="fas fa-share"></i> Share Report
                                 </button>
                             </div>
                         </div>
-                        <div class="output-content">
-                            <pre class="output-text">{{ block.output }}</pre>
+
+                        <div v-if="analysis.dockerfile" class="section">
+                            <h4>Dockerfile</h4>
+                            <button @click="showDockerfile = !showDockerfile" class="btn btn-sm">
+                                <i class="fas" :class="showDockerfile ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                                {{ showDockerfile ? 'Hide' : 'Show' }}
+                            </button>
+                            <pre v-if="showDockerfile" class="dockerfile-content">{{ analysis.dockerfile }}</pre>
                         </div>
                     </div>
                 </div>
-
-                <!-- Add Block Section -->
-                <div class="add-block-section" v-if="notebook.blocks && notebook.blocks.length > 0">
-                    <button class="btn-add-block">
-                        <i class="fas fa-plus"></i>
-                        Add Block
-                    </button>
-                    <div class="add-block-options">
-                        <button @click="addBlock('code')" class="btn btn-sm">
-                            <i class="fas fa-code"></i>
-                            Code
-                        </button>
-                        <button @click="addBlock('markdown')" class="btn btn-sm">
-                            <i class="fas fa-paragraph"></i>
-                            Text
-                        </button>
-                    </div>
-                </div>
             </div>
-        </div>
-
-        <!-- Sidebar -->
-        <aside class="sidebar">
-            <div class="sidebar-section">
-                <h3>
-                    <i class="fas fa-check-circle"></i>
-                    Reproducibility Status
-                </h3>
-
-                <div class="status-card status-good">
-                    <div class="status-header">
-                        <i class="fas fa-shield-alt"></i>
-                        <span>Good</span>
-                        <span class="status-score">85%</span>
-                    </div>
-                    <p>Your notebook follows most reproducibility best practices.</p>
-                </div>
-
-                <div class="checks-list">
-                    <div class="check-item check-pass">
-                        <i class="fas fa-check"></i>
-                        <span>Random seed set</span>
-                    </div>
-                    <div class="check-item check-pass">
-                        <i class="fas fa-check"></i>
-                        <span>Libraries loaded</span>
-                    </div>
-                    <div class="check-item check-warning">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <span>External data sources</span>
-                    </div>
-                    <div class="check-item check-pass">
-                        <i class="fas fa-check"></i>
-                        <span>No hardcoded paths</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="sidebar-section">
-                <h3>
-                    <i class="fas fa-cogs"></i>
-                    R4R Analysis
-                </h3>
-
-                <div class="r4r-status">
-                    <div class="r4r-item">
-                        <span class="r4r-label">Dependencies:</span>
-                        <span class="r4r-value">5 packages</span>
-                    </div>
-                    <div class="r4r-item">
-                        <span class="r4r-label">System libs:</span>
-                        <span class="r4r-value">3 detected</span>
-                    </div>
-                    <div class="r4r-item">
-                        <span class="r4r-label">Docker ready:</span>
-                        <span class="r4r-value status-ready">Yes</span>
-                    </div>
-                </div>
-
-                <button class="btn btn-primary btn-full">
-                    <i class="fas fa-download"></i>
-                    Generate Environment
-                </button>
-            </div>
-
-            <div class="sidebar-section">
-                <h3>
-                    <i class="fas fa-share-alt"></i>
-                    Export & Share
-                </h3>
-
-                <div class="export-options">
-                    <button class="btn btn-outline btn-sm">
-                        <i class="fas fa-file-code"></i>
-                        R Markdown
-                    </button>
-                    <button class="btn btn-outline btn-sm">
-                        <i class="fas fa-file-pdf"></i>
-                        PDF
-                    </button>
-                    <button class="btn btn-outline btn-sm">
-                        <i class="fas fa-globe"></i>
-                        HTML
-                    </button>
-                    <button class="btn btn-outline btn-sm">
-                        <i class="fab fa-docker"></i>
-                        Docker
-                    </button>
-                </div>
-            </div>
-        </aside>
-
-        <!-- Loading Overlay -->
-        <div v-if="loading" class="loading-overlay">
-            <div class="spinner"></div>
-            <p>Loading notebook...</p>
-        </div>
+        </Transition>
     </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import api, { type Notebook, type NotebookBlock } from '@/services/api'
+import { ref, onMounted, watch, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
+import api from '@/services/api'
 
 const route = useRoute()
-const router = useRouter()
 
-const notebook = ref<Notebook>({
+const notebook = ref<any>({
     title: 'Untitled Notebook',
-    blocks: []
+    content: ''
 })
-const loading = ref(false)
+
+const notebookTitle = ref('Untitled Notebook')
+const cleanContent = ref('')
+const warnings = ref<any[]>([])
+
 const executing = ref(false)
+const executionResult = ref<string | null>(null)
+const analysis = ref<any>(null)
+const showAnalysis = ref(false)
+const showDockerfile = ref(false)
+const editorTextarea = ref<HTMLTextAreaElement | null>(null)
 
-const formattedDate = computed(() => {
-    if (!notebook.value.updated_at) return ''
-    const date = new Date(notebook.value.updated_at)
-    const now = new Date()
-    const diff = now.getTime() - date.getTime()
-    const hours = Math.floor(diff / (1000 * 60 * 60))
+let resizeStartX = 0
+let resizeStartWidth = 0
+let isResizing = false
 
-    if (hours < 1) return 'just now'
-    if (hours < 24) return `${hours} hours ago`
-    return date.toLocaleDateString()
+const placeholderText = `## Introduction
+
+Write your analysis here using Markdown and R code blocks.
+
+\`\`\`{r}
+# Load libraries
+library(ggplot2)
+
+# Your analysis
+data <- mtcars
+summary(data)
+
+# Visualization
+ggplot(data, aes(x=wt, y=mpg)) + 
+  geom_point() +
+  geom_smooth(method='lm')
+\`\`\`
+
+## Results
+
+Add your findings and conclusions here.`
+
+const extractCleanContent = (content: string): string => {
+    if (!content) return ''
+    const yamlRegex = /^---\s*\n[\s\S]*?\n---\s*\n/
+    return content.replace(yamlRegex, '').trim()
+}
+
+const generateFullRmd = (): string => {
+    const yaml = `---
+title: "${notebookTitle.value}"
+output: html_document
+---
+
+`
+    return yaml + cleanContent.value
+}
+
+watch(
+    () => notebook.value.content,
+    (newContent) => {
+        if (newContent) {
+            cleanContent.value = extractCleanContent(newContent)
+        }
+    }
+)
+
+watch(notebookTitle, () => {
+    notebook.value.title = notebookTitle.value
 })
 
 const loadNotebook = async () => {
-    const notebookId = route.params.id as string
-
-    console.log('Loading notebook:', notebookId)
-
-    if (!notebookId || notebookId === 'new') {
-        console.log('Creating new notebook')
-        await createNotebook()
-        return
-    }
-
-    loading.value = true
-    try {
-        console.log('Fetching notebook from API...')
-        const data = await api.getNotebook(notebookId)
-        console.log('Notebook loaded:', data)
-
-        notebook.value = data
-
-        if (!notebook.value.blocks) {
-            notebook.value.blocks = []
+    const id = route.params.id as string
+    if (id && id !== 'new') {
+        try {
+            const data = await api.getNotebook(id)
+            notebook.value = data
+            notebookTitle.value = data.title
+            cleanContent.value = extractCleanContent(data.content)
+        } catch (error) {
+            console.error('Failed to load notebook:', error)
         }
-
-        console.log('Total blocks:', notebook.value.blocks.length)
-    } catch (error) {
-        console.error('Error loading notebook:', error)
-        alert('Failed to load notebook')
-    } finally {
-        loading.value = false
     }
 }
 
-const createNotebook = async () => {
-    loading.value = true
-    try {
-        console.log('Creating new notebook...')
-        const newNotebook = await api.createNotebook({
-            title: 'Untitled Notebook'
-        })
-        console.log('Notebook created:', newNotebook)
-        notebook.value = newNotebook
-
-        if (!notebook.value.blocks) {
-            notebook.value.blocks = []
-        }
-
-        router.replace(`/notebook/${newNotebook.id}`)
-    } catch (error) {
-        console.error('Error creating notebook:', error)
-        alert('Failed to create notebook')
-    } finally {
-        loading.value = false
-    }
+const updateTitle = async () => {
+    notebook.value.title = notebookTitle.value
+    await saveNotebook()
 }
 
 const saveNotebook = async () => {
-    if (!notebook.value.id) return
+    notebook.value.content = generateFullRmd()
 
     try {
-        await api.updateNotebook(notebook.value.id, {
-            title: notebook.value.title
-        })
-        console.log('Notebook saved')
+        if (notebook.value.id) {
+            await api.updateNotebook(notebook.value.id, notebook.value)
+        } else {
+            const created = await api.createNotebook(notebook.value)
+            notebook.value = created
+            notebookTitle.value = created.title
+        }
     } catch (error) {
-        console.error('Error saving notebook:', error)
+        console.error('Save failed:', error)
     }
 }
 
-const addBlock = async (blockType: 'code' | 'markdown') => {
+const debouncedSave = debounce(() => {
+    saveNotebook()
+}, 2000)
+
+const executeNotebook = async () => {
     if (!notebook.value.id) {
-        console.error('No notebook ID')
-        alert('Please wait for notebook to load')
-        return
+        await saveNotebook()
     }
 
-    try {
-        console.log(`Adding ${blockType} block...`)
+    executing.value = true
+    executionResult.value = null
 
+    try {
         const response = await fetch(
-            `http://localhost:8000/api/notebooks/${notebook.value.id}/add_block/`,
+            `http://localhost:8000/api/notebooks/${notebook.value.id}/execute/`,
             {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ block_type: blockType })
+                }
             }
+        )
+
+        if (!response.ok) {
+            const error = await response.json()
+            throw new Error(error.error || `HTTP error! status: ${response.status}`)
+        }
+
+        const result = await response.json()
+        console.log(result)
+        executionResult.value = result.html
+
+    } catch (error: any) {
+        console.error('Execution failed:', error)
+        alert(`Execution failed: ${error.message}`)
+    } finally {
+        executing.value = false
+    }
+}
+
+const loadAnalysis = async () => {
+    if (!notebook.value.id) return
+
+    try {
+        const response = await fetch(
+            `http://localhost:8000/api/notebooks/${notebook.value.id}/reproducibility/`
         )
 
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`)
         }
 
-        const newBlock = await response.json()
-        console.log('Block created:', newBlock)
-
-        if (!notebook.value.blocks) {
-            notebook.value.blocks = []
-        }
-        notebook.value.blocks.push(newBlock)
-
+        const data = await response.json()
+        analysis.value = data
+        warnings.value = data.warnings || []
+        highlightWarnings()
     } catch (error) {
-        console.error('Error adding block:', error)
-        alert('Failed to add block')
+        console.error('Failed to load analysis:', error)
     }
 }
 
-const updateBlock = async (block: NotebookBlock) => {
-    if (!block.id) return
-
-    try {
-        await api.updateBlock(block.id, { content: block.content })
-    } catch (error) {
-        console.error('Error updating block:', error)
+const toggleAnalysis = async () => {
+    if (!analysis.value || !notebook.value.id) {
+        await loadAnalysis()
+    } else {
+        showAnalysis.value = !showAnalysis.value
     }
 }
 
-const executeBlock = async (block: NotebookBlock & { executing?: boolean }) => {
-    if (!notebook.value.id) return
+const highlightWarnings = () => {
+    if (!editorTextarea.value || warnings.value.length === 0) return
 
-    block.executing = true
-    try {
-        const response = await fetch(
-            `http://localhost:8000/api/notebooks/${notebook.value.id}/execute_block/`,
-            {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ block_id: block.id })
+    nextTick(() => {
+        const textarea = editorTextarea.value
+        const lines = textarea.value.split('\n')
+
+        warnings.value.forEach(warning => {
+            if (warning.line <= lines.length) {
+                const lineElement = textarea.parentElement?.querySelector(
+                    `[data-line="${warning.line}"]`
+                ) as HTMLElement
+                if (lineElement) {
+                    lineElement.classList.add('warning-line')
+                    lineElement.title = warning.message
+                }
             }
-        )
-
-        const updatedBlock = await response.json()
-
-        const blockIndex = notebook.value.blocks?.findIndex(b => b.id === block.id)
-        if (blockIndex !== -1 && notebook.value.blocks) {
-            notebook.value.blocks[blockIndex] = updatedBlock
-        }
-    } catch (error) {
-        console.error('Error executing block:', error)
-    }
-    block.executing = false
+        })
+    })
 }
 
-const executeAll = async () => {
-    executing.value = true
-    if (notebook.value.blocks) {
-        for (const block of notebook.value.blocks) {
-            if (block.block_type === 'code') {
-                await executeBlock(block)
-            }
-        }
-    }
-    executing.value = false
-}
-
-const deleteBlock = async (blockId: string) => {
-    if (!confirm('Are you sure you want to delete this block?')) return
-
+const generateDockerfile = async () => {
     try {
-        await api.deleteBlock(blockId)
-        if (notebook.value.blocks) {
-            notebook.value.blocks = notebook.value.blocks.filter(b => b.id !== blockId)
-        }
+        const response = await fetch(`/api/notebooks/${notebook.value.id}/docker/`, {
+            method: 'POST'
+        })
+        const dockerData = await response.json()
+        downloadFile(dockerData.dockerfile, 'Dockerfile', 'text/plain')
     } catch (error) {
-        console.error('Error deleting block:', error)
+        console.error('Docker generation failed:', error)
     }
 }
 
-const moveBlock = async (index: number, direction: number) => {
-    // Type guard
-    const blocks = notebook.value.blocks
-    if (!blocks || blocks.length === 0) return
-
-    const newIndex = index + direction
-    if (newIndex < 0 || newIndex >= blocks.length) return
-
-    // TypeScript now knows blocks is defined
-    const blockA = blocks[index]
-    const blockB = blocks[newIndex]
-
-    if (!blockA || !blockB) return
-
-    // Create new array
-    const newBlocks = [...blocks]
-    newBlocks[index] = blockB
-    newBlocks[newIndex] = blockA
-
-    // Update orders
-    blockA.order = newIndex
-    blockB.order = index
-
-    // Assign back
-    notebook.value.blocks = newBlocks
-
-    // Save
-    await updateBlock(blockA)
-    await updateBlock(blockB)
+const fixNonDeterminism = async () => {
+    alert('Auto-fix feature coming soon!')
 }
 
+const shareReproducibility = () => {
+    const reportUrl = `/report/${notebook.value.id}`
+    navigator.clipboard.writeText(reportUrl)
+    alert('Reproducibility report link copied!')
+}
+
+const downloadRmd = () => {
+    const fullContent = generateFullRmd()
+    downloadFile(fullContent, `${notebookTitle.value}.Rmd`, 'text/plain')
+}
+
+const downloadFile = (content: string, filename: string, type: string) => {
+    const blob = new Blob([content], { type })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+}
+
+const startResize = (e: MouseEvent) => {
+    isResizing = true
+    resizeStartX = e.clientX
+    const editorPane = document.querySelector('.editor-pane') as HTMLElement
+    resizeStartWidth = editorPane.offsetWidth
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', stopResize)
+}
+
+const onMouseMove = (e: MouseEvent) => {
+    if (!isResizing) return
+    const editorPane = document.querySelector('.editor-pane') as HTMLElement
+    const newWidth = resizeStartWidth + (e.clientX - resizeStartX)
+    if (newWidth > 200 && newWidth < window.innerWidth - 200) {
+        editorPane.style.flex = `0 0 ${newWidth}px`
+    }
+}
+
+const stopResize = () => {
+    isResizing = false
+    document.removeEventListener('mousemove', onMouseMove)
+    document.removeEventListener('mouseup', stopResize)
+}
+
+const onEditorScroll = () => {
+    highlightWarnings()
+}
+
+function debounce<T extends (...args: any[]) => any>(fn: T, delay: number) {
+    let timeout: any
+    return (...args: Parameters<T>) => {
+        clearTimeout(timeout)
+        timeout = setTimeout(() => fn(...args), delay)
+    }
+}
 
 onMounted(() => {
     loadNotebook()
@@ -467,406 +433,516 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.main-content {
-    display: grid;
-    grid-template-columns: 1fr 320px;
-    gap: var(--space-6);
-    padding: var(--space-6);
-    max-width: 1400px;
-    margin: 0 auto;
-}
-
 .notebook-editor {
-    background: white;
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-sm);
-    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background: #f5f5f5;
 }
 
 .editor-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: var(--space-6);
-    border-bottom: 1px solid var(--color-gray-200);
-    background: var(--color-gray-50);
-}
-
-.title-section {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
+    padding: 1rem 2rem;
+    background: white;
+    border-bottom: 1px solid #e5e7eb;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    z-index: 10;
 }
 
 .notebook-title {
-    font-size: 1.5rem;
+    font-size: 1.25rem;
     font-weight: 600;
     border: none;
-    background: transparent;
-    color: var(--color-gray-900);
-    padding: var(--space-1) 0;
+    outline: none;
+    padding: 0.5rem;
+    border-radius: 4px;
     min-width: 300px;
 }
 
 .notebook-title:focus {
-    outline: none;
-    border-bottom: 2px solid var(--color-primary);
-}
-
-.author-info {
-    font-size: 0.875rem;
-    color: var(--color-gray-500);
+    background: #f9fafb;
 }
 
 .editor-actions {
     display: flex;
-    gap: var(--space-2);
+    gap: 0.5rem;
 }
 
-.notebook-blocks {
-    padding: var(--space-6);
+.editor-split-view {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+.editor-pane,
+.output-pane {
+    flex: 1;
     display: flex;
     flex-direction: column;
-    gap: var(--space-6);
-}
-
-.notebook-block {
-    border: 1px solid var(--color-gray-200);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
     background: white;
-    box-shadow: var(--shadow-sm);
+    overflow: hidden;
 }
 
-.block-code {
-    border-left: 4px solid var(--color-primary);
-}
-
-.block-markdown {
-    border-left: 4px solid var(--color-secondary);
-}
-
-.block-header {
+.pane-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: var(--space-3) var(--space-4);
-    background: var(--color-gray-50);
-    border-bottom: 1px solid var(--color-gray-200);
+    padding: 0.75rem 1.5rem;
+    background: #fafafa;
+    border-bottom: 1px solid #e5e7eb;
 }
 
-.block-info {
+.pane-header h3 {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #6b7280;
     display: flex;
     align-items: center;
-    gap: var(--space-3);
+    gap: 0.5rem;
 }
 
-.block-type {
+.editor-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.warning-badge {
+    background: #fef3c7;
+    color: #d97706;
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
     font-size: 0.75rem;
     font-weight: 600;
-    text-transform: uppercase;
-    color: var(--color-gray-600);
 }
 
-.block-number {
-    font-size: 0.75rem;
-    color: var(--color-gray-500);
-    font-family: var(--font-mono);
-}
-
-.execution-status {
+.output-status {
+    font-size: 0.875rem;
     display: flex;
     align-items: center;
-    gap: var(--space-1);
-    font-size: 0.75rem;
-    font-weight: 500;
+    gap: 0.5rem;
 }
 
 .status-running {
-    color: var(--color-warning);
+    color: #3b82f6;
 }
 
-.block-actions {
-    display: flex;
-    gap: var(--space-1);
+.status-success {
+    color: #10b981;
 }
 
-.block-content {
-    padding: 0;
+.status-empty {
+    color: #6b7280;
 }
 
-.code-editor,
-.markdown-editor {
-    width: 100%;
-    border: none;
-    outline: none;
-    padding: var(--space-4);
-    font-family: var(--font-mono);
+.rmarkdown-editor {
+    flex: 1;
+    padding: 2rem;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
     font-size: 14px;
-    line-height: 1.5;
-    background: #1e293b;
-    color: #e2e8f0;
-    resize: vertical;
-}
-
-.markdown-editor {
-    background: var(--color-gray-50);
-    color: var(--color-gray-800);
-    font-family: var(--font-sans);
-}
-
-.code-editor:focus {
-    background: #0f172a;
-}
-
-.markdown-editor:focus {
+    line-height: 1.8;
+    border: none;
+    resize: none;
+    outline: none;
     background: white;
+    color: #1f2937;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
 }
 
-.block-output {
-    border-top: 1px solid var(--color-gray-200);
+.rmarkdown-editor.has-warnings {
+    position: relative;
 }
 
-.output-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: var(--space-2) var(--space-4);
-    background: #334155;
-    color: #cbd5e1;
-    font-size: 0.75rem;
-    font-weight: 600;
+.rmarkdown-editor::placeholder {
+    color: #9ca3af;
 }
 
-.output-actions {
-    display: flex;
-    gap: var(--space-1);
+.warning-line {
+    background: linear-gradient(90deg, rgba(254, 226, 226, 0.6) 0%, transparent 50%) !important;
+    border-left: 4px solid #f87171;
+    position: relative;
+}
+
+.warning-line::before {
+    content: '⚠️';
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 12px;
+    z-index: 10;
+}
+
+.resize-handle {
+    width: 4px;
+    background: #e5e7eb;
+    cursor: col-resize;
+    transition: background 0.2s;
+}
+
+.resize-handle:hover {
+    background: #6366f1;
 }
 
 .output-content {
-    padding: var(--space-4);
-    background: #1e293b;
+    flex: 1;
+    overflow: hidden;
 }
 
-.output-text {
-    color: #22c55e;
-    font-family: var(--font-mono);
-    font-size: 0.8rem;
-    white-space: pre-wrap;
-    margin: 0;
+.output-iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: white;
 }
 
-.add-block-section {
+.output-empty {
+    flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-4);
-    border: 2px dashed var(--color-gray-300);
-    border-radius: var(--radius-lg);
-    background: var(--color-gray-50);
-}
-
-.btn-add-block {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    padding: var(--space-3) var(--space-4);
-    background: white;
-    border: 1px solid var(--color-gray-300);
-    border-radius: var(--radius-md);
-    color: var(--color-gray-600);
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.btn-add-block:hover {
-    border-color: var(--color-primary);
-    color: var(--color-primary);
-}
-
-.add-block-options {
-    display: flex;
-    gap: var(--space-2);
-}
-
-.empty-notebook {
-    text-align: center;
-    padding: var(--space-12);
-    color: var(--color-gray-600);
-}
-
-.empty-notebook h3 {
-    margin-bottom: var(--space-2);
-}
-
-.empty-notebook p {
-    margin-bottom: var(--space-6);
-}
-
-.empty-actions {
-    display: flex;
-    gap: var(--space-4);
     justify-content: center;
+    color: #9ca3af;
+    padding: 2rem;
 }
 
-.btn-lg {
-    padding: var(--space-4) var(--space-6);
+.output-empty i {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    color: #d1d5db;
+}
+
+.output-empty p {
     font-size: 1rem;
 }
 
-.sidebar {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-6);
-}
-
-.sidebar-section {
-    background: white;
-    border-radius: var(--radius-lg);
-    padding: var(--space-5);
-    box-shadow: var(--shadow-sm);
-}
-
-.sidebar-section h3 {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--color-gray-800);
-    margin-bottom: var(--space-4);
-}
-
-.status-card {
-    padding: var(--space-4);
-    border-radius: var(--radius-md);
-    margin-bottom: var(--space-4);
-}
-
-.status-good {
-    background: rgba(34, 197, 94, 0.1);
-    border: 1px solid rgba(34, 197, 94, 0.2);
-}
-
-.status-header {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    margin-bottom: var(--space-2);
-}
-
-.status-score {
-    margin-left: auto;
-    font-weight: 700;
-    color: var(--color-success);
-}
-
-.checks-list {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-}
-
-.check-item {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    font-size: 0.875rem;
-}
-
-.check-pass {
-    color: var(--color-success);
-}
-
-.check-warning {
-    color: var(--color-warning);
-}
-
-.r4r-status {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-    margin-bottom: var(--space-4);
-}
-
-.r4r-item {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.875rem;
-}
-
-.r4r-label {
-    color: var(--color-gray-600);
-}
-
-.r4r-value {
-    font-weight: 500;
-}
-
-.status-ready {
-    color: var(--color-success);
-}
-
-.export-options {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-2);
-}
-
-.loading-overlay {
+/* Modal Styles */
+.modal-overlay {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(255, 255, 255, 0.9);
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
+    padding: 1rem;
 }
 
-.spinner {
+.modal-container {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    width: 100%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow: hidden;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem 2rem 1rem 2rem;
+    border-bottom: 1px solid #e5e7eb;
+    background: #fafafa;
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: #1f2937;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.25rem;
+    color: #6b7280;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 6px;
     width: 40px;
     height: 40px;
-    border: 4px solid var(--color-gray-200);
-    border-left-color: var(--color-primary);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
 }
 
-@keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
+.modal-close:hover {
+    background: #f3f4f6;
+    color: #374151;
 }
 
-@media (max-width: 1024px) {
-    .main-content {
-        grid-template-columns: 1fr;
-    }
-
-    .sidebar {
-        order: -1;
-    }
+.modal-body {
+    padding: 2rem;
+    overflow-y: auto;
+    max-height: calc(90vh - 80px);
 }
 
-@media (max-width: 768px) {
-    .editor-header {
-        flex-direction: column;
-        gap: var(--space-4);
-        align-items: stretch;
-    }
+.analysis-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #f3f4f6;
+}
 
-    .editor-actions {
-        justify-content: center;
-        flex-wrap: wrap;
-    }
+.analysis-item .label {
+    font-weight: 500;
+    color: #6b7280;
+    font-size: 0.875rem;
+}
 
-    .main-content {
-        padding: var(--space-4);
-    }
+.analysis-item .value {
+    font-weight: 600;
+    color: #1f2937;
+    font-size: 0.875rem;
+}
+
+.score-badge {
+    background: #10b981;
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+}
+
+.warning-section {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 1rem 0;
+}
+
+.warning-list {
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+.warning-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+    font-size: 0.85rem;
+}
+
+.warning-text {
+    color: #92400e;
+}
+
+.warning-more {
+    color: #d97706;
+    font-size: 0.8rem;
+    text-align: center;
+    padding: 0.5rem;
+    background: #fef3c7;
+    border-radius: 4px;
+    margin-top: 0.25rem;
+}
+
+.comparison-section {
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 1rem 0;
+}
+
+.env-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.env-item {
+    padding: 1rem;
+    background: white;
+    border-radius: 6px;
+    text-align: center;
+}
+
+.env-name {
+    font-weight: 600;
+    color: #0369a1;
+    margin-bottom: 0.25rem;
+}
+
+.env-diff {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #0ea5e9;
+}
+
+.section {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #f3f4f6;
+}
+
+.section h4 {
+    margin: 0 0 0.75rem 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+}
+
+.dependency-list {
+    list-style: none;
+    padding: 0;
+    margin: 0.5rem 0 0 0;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.dependency-list li {
+    padding: 0.5rem;
+    margin: 0.25rem 0;
+    background: #f9fafb;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.dependency-list li i {
+    color: #6366f1;
+}
+
+.action-section {
+    /* border-top: 1px solid #e5e7eb; */
+    padding-top: 1rem;
+    margin-bottom: 1rem;
+}
+
+.action-buttons {
+    margin-top: 1rem;
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.dockerfile-content {
+    background: #1f2937;
+    color: #f9fafb;
+    padding: 0.75rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    line-height: 1.4;
+    overflow-x: auto;
+    margin-top: 0.5rem;
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.btn {
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    border: none;
+    font-weight: 500;
+    font-size: 0.875rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background: #6366f1;
+    color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: #4f46e5;
+}
+
+.btn-success {
+    background: #10b981;
+    color: white;
+}
+
+.btn-success:hover:not(:disabled) {
+    background: #059669;
+}
+
+.btn-secondary {
+    background: #8b5cf6;
+    color: white;
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: #7c3aed;
+}
+
+.btn-warning {
+    background: #f59e0b;
+    color: white;
+}
+
+.btn-warning:hover:not(:disabled) {
+    background: #d97706;
+}
+
+.btn-outline {
+    background: white;
+    border: 1px solid #d1d5db;
+    color: #374151;
+}
+
+.btn-outline:hover {
+    background: #f9fafb;
+}
+
+.btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+}
+
+.btn-icon {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.5rem;
+    color: #6b7280;
+}
+
+.btn-icon:hover {
+    color: #1f2937;
+}
+
+.text-warning {
+    color: #f59e0b !important;
+}
+
+.modal-enter-active,
+.modal-leave-active {
+    transition: opacity 0.3s ease;
+}
+
+.modal-enter-from,
+.modal-leave-to {
+    opacity: 0;
 }
 </style>

@@ -85,16 +85,18 @@ class NotebookViewSet(viewsets.ModelViewSet):
             print(f"DEBUG: Result keys: {result.keys()}")
 
             if result["success"]:
+                print(f"DEBUG: HTML length: {len(result['html'])}")
+                print(f"DEBUG: HTML starts with: {result['html'][:100]}")
+                print(f"DEBUG: HTML ends with: {result['html'][-100:]}")
                 execution.html_output = result["html"]
                 execution.status = "completed"
                 execution.completed_at = timezone.now()
                 execution.save()
 
-                # Save r4r analysis
                 ReproducibilityAnalysis.objects.update_or_create(
                     notebook=notebook,
                     defaults={
-                        "r4r_score": 100,  # r4r guarantees reproducibility
+                        "r4r_score": 100,
                         "dependencies": result.get("dependencies", []),
                         "system_deps": result.get("system_deps", []),
                         "dockerfile": result.get("dockerfile", ""),
