@@ -18,4 +18,9 @@ router.register(r"analyses", ReproducibilityAnalysisViewSet, basename="analysis"
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include(router.urls)),
+    path(
+        "api/notebooks/<int:pk>/analysis/",
+        NotebookViewSet.as_view({"get": "analysis"}),
+        name="notebook-analysis",
+    ),
 ]

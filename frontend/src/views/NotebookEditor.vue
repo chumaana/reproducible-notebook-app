@@ -17,10 +17,14 @@
                 <button @click="downloadRmd" class="btn btn-outline">
                     <i class="fas fa-download"></i> Download .Rmd
                 </button>
+                <button @click="downloadPackage" class="btn btn-outline" :disabled="!notebook.id || packageLoading">
+                    <i class="fas" :class="packageLoading ? 'fa-spinner fa-spin' : 'fa-box'"></i>
+                    {{ packageLoading ? 'Preparing...' : 'Download Package' }}
+                </button>
             </div>
         </div>
 
-        <!-- Split View: Editor | Output (like Overleaf) -->
+        <!-- Split View: Editor | Output -->
         <div class="editor-split-view">
             <!-- Left: Editor -->
             <div class="editor-pane">
@@ -32,9 +36,8 @@
                         </span>
                     </div>
                 </div>
-                <textarea ref="editorTextarea" v-model="cleanContent" @input="debouncedSave" @scroll="onEditorScroll"
-                    class="rmarkdown-editor" :placeholder="placeholderText"
-                    :class="{ 'has-warnings': warnings.length > 0 }"></textarea>
+                <textarea ref="editorTextarea" v-model="cleanContent" @input="debouncedSave" class="rmarkdown-editor"
+                    :placeholder="placeholderText" :class="{ 'has-warnings': warnings.length > 0 }"></textarea>
             </div>
 
             <!-- Resize Handle -->
@@ -68,82 +71,86 @@
             </div>
         </div>
 
-        <!-- Analysis Modal -->
-        <Transition name="modal">
-            <div v-if="showAnalysis && analysis" class="modal-overlay" @click="showAnalysis = false">
-                <div class="modal-container" @click.stop>
-                    <div class="modal-header">
-                        <h3><i class="fas fa-chart-bar"></i> R4R Analysis</h3>
-                        <button @click="showAnalysis = false" class="modal-close" aria-label="Close">
-                            <i class="fas fa-times"></i>
-                        </button>
+        <!-- Analysis Modal - Bottom Right -->
+        <Transition name="slide-up">
+            <div v-if="showAnalysis && analysis" class="analysis-modal-bottom">
+                <div class="modal-header-bottom">
+                    <h3><i class="fas fa-chart-bar"></i> Reproducibility Analysis</h3>
+                    <button @click="showAnalysis = false" class="modal-close-btn">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                <div class="modal-body-bottom">
+
+                    <!-- 🔥 Static Analysis Issues -->
+                    <div v-if="staticAnalysis && staticAnalysis.issues.length > 0" class="section">
+                        <h4><i class="fas fa-exclamation-triangle"></i> Non-Reproducibility Issues</h4>
+                        <div class="issues-summary">
+                            <div v-for="issue in staticAnalysis.issues" :key="issue.category" class="issue-summary-card"
+                                :class="`severity-${issue.severity}`">
+                                <div class="issue-header">
+                                    <span class="severity-badge">{{ issue.severity }}</span>
+                                    <strong>{{ issue.title }}</strong>
+                                </div>
+                                <p class="issue-details">{{ issue.details }}</p>
+                                <p class="issue-fix">💡 {{ issue.fix }}</p>
+                                <span class="issue-count">{{ issue.lines.length }} location(s)</span>
+                            </div>
+                        </div>
                     </div>
 
-                    <div class="modal-body">
-                        <div class="analysis-item">
-                            <span class="label">R4R Score:</span>
-                            <span class="value score-badge">{{ analysis.r4r_score || 0 }}%</span>
-                        </div>
+                    <!-- 🔥 Code Viewer з Highlighting -->
+                    <div v-if="staticAnalysis && staticAnalysis.issues.length > 0" class="section">
+                        <h4><i class="fas fa-code"></i> Your Code</h4>
+                        <CodeHighlighter :code="cleanContent" :issues="staticAnalysis.issues" />
+                    </div>
 
-                        <div class="analysis-item">
-                            <span class="label">Dependencies:</span>
-                            <span class="value">{{ (analysis.dependencies || []).length }} packages</span>
+                    <!-- ✅ No Issues Badge -->
+                    <div v-if="staticAnalysis && staticAnalysis.issues.length === 0" class="section">
+                        <div class="success-banner">
+                            <i class="fas fa-check-circle"></i>
+                            <span>No reproducibility issues detected!</span>
                         </div>
+                    </div>
 
-                        <div v-if="warnings.length > 0" class="warning-section">
-                            <h4><i class="fas fa-exclamation-triangle text-warning"></i> Non-determinism Risks</h4>
-                            <div class="warning-list">
-                                <div v-for="warning in warnings.slice(0, 5)" :key="warning.line" class="warning-item">
-                                    <i class="fas fa-bug text-warning"></i>
-                                    <span class="warning-text">{{ warning.message }} (line {{ warning.line }})</span>
-                                </div>
-                                <div v-if="warnings.length > 5" class="warning-more">
-                                    +{{ warnings.length - 5 }} more warnings
-                                </div>
-                            </div>
+                    <!-- r4r Dependencies -->
+                    <div v-if="(analysis.detected_packages || []).length > 0" class="section">
+                        <h4><i class="fas fa-cube"></i> R Packages ({{ analysis.detected_packages.length }})</h4>
+                        <div class="package-tags">
+                            <span v-for="pkg in (analysis.detected_packages || [])" :key="pkg" class="package-tag">
+                                {{ pkg }}
+                            </span>
                         </div>
+                    </div>
 
-                        <div v-if="analysis.environments" class="comparison-section">
-                            <h4><i class="fas fa-sync-alt"></i> Environment Diff</h4>
-                            <div class="env-grid">
-                                <div class="env-item" v-for="env in analysis.environments.slice(0, 2)" :key="env.name">
-                                    <div class="env-name">{{ env.name }}</div>
-                                    <div class="env-diff">{{ env.diff_score }}% match</div>
-                                </div>
-                            </div>
+                    <!-- r4r System Dependencies -->
+                    <div v-if="analysis.manifest && analysis.manifest.system_packages" class="section">
+                        <h4><i class="fas fa-server"></i> System Dependencies</h4>
+                        <div class="sys-deps">
+                            <span v-for="dep in analysis.manifest.system_packages.slice(0, 8)" :key="dep"
+                                class="sys-dep-tag">
+                                {{ dep }}
+                            </span>
+                            <span v-if="analysis.manifest.system_packages.length > 8" class="more-deps">
+                                +{{ analysis.manifest.system_packages.length - 8 }} more
+                            </span>
                         </div>
+                    </div>
 
-                        <div v-if="(analysis.dependencies || []).length > 0" class="section">
-                            <h4>R Packages</h4>
-                            <ul class="dependency-list">
-                                <li v-for="dep in (analysis.dependencies || [])" :key="dep">
-                                    <i class="fas fa-cube"></i> {{ dep }}
-                                </li>
-                            </ul>
-                        </div>
+                    <!-- Dockerfile Preview -->
+                    <div v-if="analysis.dockerfile" class="section">
+                        <h4><i class="fab fa-docker"></i> Dockerfile</h4>
+                        <pre class="dockerfile-preview">{{ analysis.dockerfile.substring(0, 300) }}...</pre>
+                    </div>
 
-                        <div class="action-section">
-                            <h4><i class="fas fa-tools"></i> Quick Actions</h4>
-                            <div class="action-buttons">
-                                <button @click="generateDockerfile" class="btn btn-sm btn-secondary"
-                                    :disabled="!analysis.dockerfile">
-                                    Generate Reproducible Package
-                                </button>
-
-                                <button @click="shareReproducibility" class="btn btn-sm btn-outline">
-                                    <i class="fas fa-share"></i> Share Report
-                                </button>
-                            </div>
-                        </div>
-
-                        <div v-if="analysis.dockerfile" class="section">
-                            <h4>Dockerfile</h4>
-                            <button @click="showDockerfile = !showDockerfile" class="btn btn-sm">
-                                <i class="fas" :class="showDockerfile ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
-                                {{ showDockerfile ? 'Hide' : 'Show' }}
-                            </button>
-                            <pre v-if="showDockerfile" class="dockerfile-content">{{ analysis.dockerfile }}</pre>
-                        </div>
+                    <!-- Actions -->
+                    <div class="modal-actions">
+                        <button @click="downloadPackageFromModal" class="btn btn-sm btn-primary"
+                            :disabled="packageLoading">
+                            <i class="fas" :class="packageLoading ? 'fa-spinner fa-spin' : 'fa-download'"></i>
+                            {{ packageLoading ? 'Preparing...' : 'Download Reproducibility Package' }}
+                        </button>
                     </div>
                 </div>
             </div>
@@ -155,6 +162,7 @@
 import { ref, onMounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '@/services/api'
+import CodeHighlighter from '@/components/CodeHighlighter.vue'
 
 const route = useRoute()
 
@@ -170,9 +178,10 @@ const warnings = ref<any[]>([])
 const executing = ref(false)
 const executionResult = ref<string | null>(null)
 const analysis = ref<any>(null)
+const staticAnalysis = ref<any>(null)
 const showAnalysis = ref(false)
-const showDockerfile = ref(false)
 const editorTextarea = ref<HTMLTextAreaElement | null>(null)
+const packageLoading = ref(false)
 
 let resizeStartX = 0
 let resizeStartWidth = 0
@@ -293,8 +302,19 @@ const executeNotebook = async () => {
         }
 
         const result = await response.json()
-        console.log(result)
+        console.log('Execute result:', result)
         executionResult.value = result.html
+
+        // 🔥 Store analysis data from execution
+        if (result.static_analysis) {
+            staticAnalysis.value = result.static_analysis
+            warnings.value = result.static_analysis.issues || []
+        }
+
+        // Auto-load full analysis
+        if (notebook.value.id) {
+            await loadAnalysis()
+        }
 
     } catch (error: any) {
         console.error('Execution failed:', error)
@@ -318,8 +338,13 @@ const loadAnalysis = async () => {
 
         const data = await response.json()
         analysis.value = data
-        warnings.value = data.warnings || []
-        highlightWarnings()
+
+        // 🔥 Load static analysis
+        if (data.static_analysis) {
+            staticAnalysis.value = data.static_analysis
+            warnings.value = data.static_analysis.issues || []
+        }
+
     } catch (error) {
         console.error('Failed to load analysis:', error)
     }
@@ -328,58 +353,43 @@ const loadAnalysis = async () => {
 const toggleAnalysis = async () => {
     if (!analysis.value || !notebook.value.id) {
         await loadAnalysis()
-    } else {
-        showAnalysis.value = !showAnalysis.value
     }
-}
-
-const highlightWarnings = () => {
-    if (!editorTextarea.value || warnings.value.length === 0) return
-
-    nextTick(() => {
-        const textarea = editorTextarea.value
-        const lines = textarea.value.split('\n')
-
-        warnings.value.forEach(warning => {
-            if (warning.line <= lines.length) {
-                const lineElement = textarea.parentElement?.querySelector(
-                    `[data-line="${warning.line}"]`
-                ) as HTMLElement
-                if (lineElement) {
-                    lineElement.classList.add('warning-line')
-                    lineElement.title = warning.message
-                }
-            }
-        })
-    })
-}
-
-const generateDockerfile = async () => {
-    try {
-        const response = await fetch(`/api/notebooks/${notebook.value.id}/docker/`, {
-            method: 'POST'
-        })
-        const dockerData = await response.json()
-        downloadFile(dockerData.dockerfile, 'Dockerfile', 'text/plain')
-    } catch (error) {
-        console.error('Docker generation failed:', error)
-    }
-}
-
-const fixNonDeterminism = async () => {
-    alert('Auto-fix feature coming soon!')
-}
-
-const shareReproducibility = () => {
-    const reportUrl = `/report/${notebook.value.id}`
-    navigator.clipboard.writeText(reportUrl)
-    alert('Reproducibility report link copied!')
+    showAnalysis.value = !showAnalysis.value
 }
 
 const downloadRmd = () => {
     const fullContent = generateFullRmd()
     downloadFile(fullContent, `${notebookTitle.value}.Rmd`, 'text/plain')
 }
+
+const downloadPackage = async () => {
+    if (!notebook.value.id || packageLoading.value) return
+
+    packageLoading.value = true
+
+    try {
+        const checkResponse = await fetch(
+            `http://localhost:8000/api/notebooks/${notebook.value.id}/reproducibility/`
+        )
+
+        if (!checkResponse.ok) {
+            alert('Please run the notebook first to generate the reproducibility package!')
+            return
+        }
+
+        const url = `http://localhost:8000/api/notebooks/${notebook.value.id}/download_package/`
+        window.open(url, '_blank')
+    } catch (error) {
+        console.error('Download failed:', error)
+        alert('Failed to download package. Please try again.')
+    } finally {
+        setTimeout(() => {
+            packageLoading.value = false
+        }, 1000)
+    }
+}
+
+const downloadPackageFromModal = downloadPackage
 
 const downloadFile = (content: string, filename: string, type: string) => {
     const blob = new Blob([content], { type })
@@ -413,10 +423,6 @@ const stopResize = () => {
     isResizing = false
     document.removeEventListener('mousemove', onMouseMove)
     document.removeEventListener('mouseup', stopResize)
-}
-
-const onEditorScroll = () => {
-    highlightWarnings()
 }
 
 function debounce<T extends (...args: any[]) => any>(fn: T, delay: number) {
@@ -554,28 +560,8 @@ onMounted(() => {
     word-wrap: break-word;
 }
 
-.rmarkdown-editor.has-warnings {
-    position: relative;
-}
-
 .rmarkdown-editor::placeholder {
     color: #9ca3af;
-}
-
-.warning-line {
-    background: linear-gradient(90deg, rgba(254, 226, 226, 0.6) 0%, transparent 50%) !important;
-    border-left: 4px solid #f87171;
-    position: relative;
-}
-
-.warning-line::before {
-    content: '⚠️';
-    position: absolute;
-    left: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 12px;
-    z-index: 10;
 }
 
 .resize-handle {
@@ -621,234 +607,226 @@ onMounted(() => {
     font-size: 1rem;
 }
 
-/* Modal Styles */
-.modal-overlay {
+/* Analysis Modal - Bottom Right */
+.analysis-modal-bottom {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(4px);
-    z-index: 1000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1rem;
-}
-
-.modal-container {
+    bottom: 20px;
+    right: 20px;
+    width: 480px;
+    max-height: 80vh;
     background: white;
     border-radius: 12px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-    width: 100%;
-    max-width: 500px;
-    max-height: 90vh;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
-.modal-header {
+.modal-header-bottom {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 1.5rem 2rem 1rem 2rem;
-    border-bottom: 1px solid #e5e7eb;
-    background: #fafafa;
+    padding: 1rem 1.5rem;
+    background: #6366f1;
+    color: white;
 }
 
-.modal-header h3 {
+.modal-header-bottom h3 {
     margin: 0;
-    font-size: 1.125rem;
-    font-weight: 700;
-    color: #1f2937;
+    font-size: 1rem;
+    font-weight: 600;
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.5rem;
 }
 
-.modal-close {
-    background: none;
+.modal-close-btn {
+    background: rgba(255, 255, 255, 0.2);
     border: none;
-    font-size: 1.25rem;
-    color: #6b7280;
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
     cursor: pointer;
-    padding: 0.5rem;
-    border-radius: 6px;
-    width: 40px;
-    height: 40px;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all 0.2s;
 }
 
-.modal-close:hover {
-    background: #f3f4f6;
-    color: #374151;
+.modal-close-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: rotate(90deg);
 }
 
-.modal-body {
-    padding: 2rem;
+.modal-body-bottom {
+    padding: 1.5rem;
     overflow-y: auto;
-    max-height: calc(90vh - 80px);
-}
-
-.analysis-item {
-    display: flex;
-    justify-content: space-between;
-    padding: 0.75rem 0;
-    border-bottom: 1px solid #f3f4f6;
-}
-
-.analysis-item .label {
-    font-weight: 500;
-    color: #6b7280;
-    font-size: 0.875rem;
-}
-
-.analysis-item .value {
-    font-weight: 600;
-    color: #1f2937;
-    font-size: 0.875rem;
-}
-
-.score-badge {
-    background: #10b981;
-    color: white;
-    padding: 0.25rem 0.75rem;
-    border-radius: 12px;
-    font-size: 0.75rem;
-}
-
-.warning-section {
-    background: #fffbeb;
-    border: 1px solid #fde68a;
-    border-radius: 8px;
-    padding: 1rem;
-    margin: 1rem 0;
-}
-
-.warning-list {
-    max-height: 120px;
-    overflow-y: auto;
-}
-
-.warning-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 0;
-    font-size: 0.85rem;
-}
-
-.warning-text {
-    color: #92400e;
-}
-
-.warning-more {
-    color: #d97706;
-    font-size: 0.8rem;
-    text-align: center;
-    padding: 0.5rem;
-    background: #fef3c7;
-    border-radius: 4px;
-    margin-top: 0.25rem;
-}
-
-.comparison-section {
-    background: #f0f9ff;
-    border: 1px solid #bae6fd;
-    border-radius: 8px;
-    padding: 1rem;
-    margin: 1rem 0;
-}
-
-.env-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-}
-
-.env-item {
-    padding: 1rem;
-    background: white;
-    border-radius: 6px;
-    text-align: center;
-}
-
-.env-name {
-    font-weight: 600;
-    color: #0369a1;
-    margin-bottom: 0.25rem;
-}
-
-.env-diff {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: #0ea5e9;
+    max-height: calc(80vh - 60px);
 }
 
 .section {
-    margin-top: 1rem;
+    margin-top: 1.25rem;
     padding-top: 1rem;
     border-top: 1px solid #f3f4f6;
 }
 
+.section:first-child {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+}
+
 .section h4 {
-    margin: 0 0 0.75rem 0;
     font-size: 0.875rem;
+    color: #374151;
+    margin: 0 0 0.75rem 0;
     font-weight: 600;
-    color: #6b7280;
-    text-transform: uppercase;
-}
-
-.dependency-list {
-    list-style: none;
-    padding: 0;
-    margin: 0.5rem 0 0 0;
-    max-height: 200px;
-    overflow-y: auto;
-}
-
-.dependency-list li {
-    padding: 0.5rem;
-    margin: 0.25rem 0;
-    background: #f9fafb;
-    border-radius: 4px;
-    font-size: 0.8rem;
     display: flex;
     align-items: center;
     gap: 0.5rem;
 }
 
-.dependency-list li i {
-    color: #6366f1;
-}
-
-.action-section {
-    /* border-top: 1px solid #e5e7eb; */
-    padding-top: 1rem;
-    margin-bottom: 1rem;
-}
-
-.action-buttons {
-    margin-top: 1rem;
+/* 🔥 Issues Summary */
+.issues-summary {
     display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 0.75rem;
 }
 
-.dockerfile-content {
-    background: #1f2937;
-    color: #f9fafb;
-    padding: 0.75rem;
+.issue-summary-card {
+    padding: 12px;
+    border-radius: 8px;
+    border-left: 4px solid;
+}
+
+.issue-summary-card.severity-high {
+    background: #fee2e2;
+    border-left-color: #dc2626;
+}
+
+.issue-summary-card.severity-medium {
+    background: #fef3c7;
+    border-left-color: #f59e0b;
+}
+
+.issue-summary-card.severity-low {
+    background: #dbeafe;
+    border-left-color: #3b82f6;
+}
+
+.issue-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.severity-badge {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 2px 6px;
     border-radius: 4px;
-    font-size: 0.7rem;
-    line-height: 1.4;
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.issue-details {
+    font-size: 13px;
+    color: #6b7280;
+    margin: 4px 0;
+}
+
+.issue-fix {
+    font-size: 12px;
+    color: #3b82f6;
+    margin: 4px 0;
+}
+
+.issue-count {
+    font-size: 11px;
+    color: #9ca3af;
+    font-weight: 600;
+}
+
+/* Success Banner */
+.success-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    background: #d1fae5;
+    border-radius: 8px;
+    color: #059669;
+    font-weight: 600;
+}
+
+.success-banner i {
+    font-size: 24px;
+}
+
+/* Package Tags */
+.package-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.package-tag {
+    background: #f3f4f6;
+    color: #6366f1;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border: 1px solid #e5e7eb;
+}
+
+/* System Dependencies */
+.sys-deps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.sys-dep-tag {
+    background: #ede9fe;
+    color: #7c3aed;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: monospace;
+    font-weight: 600;
+}
+
+.more-deps {
+    color: #9ca3af;
+    font-size: 11px;
+    font-weight: 600;
+    align-self: center;
+}
+
+/* Dockerfile Preview */
+.dockerfile-preview {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    padding: 12px;
+    border-radius: 6px;
+    font-family: monospace;
+    font-size: 12px;
     overflow-x: auto;
-    margin-top: 0.5rem;
-    max-height: 250px;
-    overflow-y: auto;
+    margin: 0;
+}
+
+/* Actions */
+.modal-actions {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid #f3f4f6;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
 }
 
 .btn {
@@ -896,53 +874,36 @@ onMounted(() => {
     background: #7c3aed;
 }
 
-.btn-warning {
-    background: #f59e0b;
-    color: white;
-}
-
-.btn-warning:hover:not(:disabled) {
-    background: #d97706;
-}
-
 .btn-outline {
     background: white;
     border: 1px solid #d1d5db;
     color: #374151;
 }
 
-.btn-outline:hover {
+.btn-outline:hover:not(:disabled) {
     background: #f9fafb;
 }
 
 .btn-sm {
-    padding: 0.25rem 0.5rem;
-    font-size: 0.75rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    width: 100%;
+    justify-content: center;
 }
 
-.btn-icon {
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 0.5rem;
-    color: #6b7280;
+/* Slide Up Animation */
+.slide-up-enter-active,
+.slide-up-leave-active {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.btn-icon:hover {
-    color: #1f2937;
-}
-
-.text-warning {
-    color: #f59e0b !important;
-}
-
-.modal-enter-active,
-.modal-leave-active {
-    transition: opacity 0.3s ease;
-}
-
-.modal-enter-from,
-.modal-leave-to {
+.slide-up-enter-from {
     opacity: 0;
+    transform: translateY(20px);
+}
+
+.slide-up-leave-to {
+    opacity: 0;
+    transform: translateY(20px);
 }
 </style>

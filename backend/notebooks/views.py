@@ -1,11 +1,11 @@
 from rest_framework import viewsets, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
-from django.http import HttpResponse
+from django.http import HttpResponse, FileResponse
 from django.utils import timezone
-
+import os
 
 from .models import Notebook, Execution, ReproducibilityAnalysis
 from .serializers import (
@@ -100,7 +100,7 @@ class NotebookViewSet(viewsets.ModelViewSet):
                         "dependencies": result.get("dependencies", []),
                         "system_deps": result.get("system_deps", []),
                         "dockerfile": result.get("dockerfile", ""),
-                        "makefile": result.get("makefile", ""),
+                        "makefile": 'result.get("makefile", "")',
                     },
                 )
 
@@ -136,6 +136,22 @@ class NotebookViewSet(viewsets.ModelViewSet):
         return response
 
     @action(detail=True, methods=["get"])
+    def download_package(self, request, pk=None):
+        """Download reproducibility package as ZIP"""
+        notebook = self.get_object()
+        executor = RExecutor()
+        zip_path = executor.create_reproducibility_zip(str(notebook.id))
+
+        if not zip_path or not os.path.exists(zip_path):
+            return Response({"error": "Package not found"}, status=404)
+
+        response = FileResponse(open(zip_path, "rb"), content_type="application/zip")
+        response["Content-Disposition"] = (
+            f'attachment; filename="notebook-{notebook.id}-reproducibility.zip"'
+        )
+        return response
+
+    @action(detail=True, methods=["get"])
     def executions(self, request, pk=None):
         """Get execution history for notebook"""
         notebook = self.get_object()
@@ -156,6 +172,35 @@ class NotebookViewSet(viewsets.ModelViewSet):
             return Response(
                 {"error": "No analysis available. Run analysis first."}, status=404
             )
+
+    @action(detail=True, methods=["get"])
+    def analysis(self, request, pk=None):
+        notebook = self.get_object()
+        repro_dir = f"storage/notebooks/{pk}/reproducibility"
+
+        # ✅ ТІЛЬКИ якщо файли є!
+        data = {
+            "detected_packages": self.executor.detect_packages_from_content(
+                notebook.content
+            ),
+        }
+
+        if os.path.exists(repro_dir):
+            data.update(
+                {
+                    "dockerfile_preview": self.executor.read_file(
+                        repro_dir, "Dockerfile"
+                    )[:300]
+                    + "...",
+                    "makefile_preview": self.executor.read_file(repro_dir, "Makefile")[
+                        :200
+                    ]
+                    + "...",
+                    "manifest": self.executor.read_json(repro_dir, "manifest.json"),
+                }
+            )
+
+        return Response(data)
 
 
 class ExecutionViewSet(viewsets.ReadOnlyModelViewSet):

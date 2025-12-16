@@ -1,26 +1,28 @@
-# Python
+# ========================
+# Python & Django
+# ========================
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-.env
+*.py[cod]
+*$py.class
+
+# Virtual Environments (Local)
 venv/
-*.db
-*.sqlite3
+.venv/
+env/
+.env
 
-# Node.js
-node_modules/
-npm-debug.log*
-.env.local
-dist/
+# Logs
+*.log
 
-# IDE
-.vscode/
-.idea/
-
-# OS
+*.tar
+# ========================
+# Docker & System
+# ========================
 .DS_Store
 Thumbs.db
 
-# Docker
-.dockerignore
+
+# ========================
+# IDE Settings
+# ========================
+.vscode/
