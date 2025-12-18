@@ -6,6 +6,7 @@ from django.contrib.auth.models import User
 from django.http import HttpResponse, FileResponse
 from django.utils import timezone
 import os
+import traceback  # Ensure this is imported at top level
 
 from .models import Notebook, Execution, ReproducibilityAnalysis
 from .serializers import (
@@ -74,57 +75,64 @@ class NotebookViewSet(viewsets.ModelViewSet):
         notebook = self.get_object()
 
         print(f"DEBUG: Executing notebook {notebook.id}")
-        print(f"DEBUG: Content length: {len(notebook.content or '')}")
 
         execution = Execution.objects.create(notebook=notebook, status="running")
 
         try:
             executor = RExecutor()
-            print("DEBUG: About to call r4r executor")
             result = executor.execute_rmd(notebook.content, str(notebook.id))
-            print(f"DEBUG: Result keys: {result.keys()}")
 
-            if result["success"]:
-                print(f"DEBUG: HTML length: {len(result['html'])}")
-                print(f"DEBUG: HTML starts with: {result['html'][:100]}")
-                print(f"DEBUG: HTML ends with: {result['html'][-100:]}")
-                execution.html_output = result["html"]
+            # --- SUCCESS CASE ---
+            if result.get("success"):
+                execution.html_output = result.get("html", "")
                 execution.status = "completed"
                 execution.completed_at = timezone.now()
                 execution.save()
 
+                # Save analysis
                 ReproducibilityAnalysis.objects.update_or_create(
                     notebook=notebook,
                     defaults={
                         "r4r_score": 100,
-                        "dependencies": result.get("dependencies", []),
-                        "system_deps": result.get("system_deps", []),
+                        "dependencies": result.get("detected_packages", []),
+                        "system_deps": result.get("manifest", {}).get(
+                            "system_packages", []
+                        ),
                         "dockerfile": result.get("dockerfile", ""),
-                        "makefile": 'result.get("makefile", "")',
+                        "makefile": result.get("makefile", ""),
                     },
                 )
 
-                return Response(
-                    {
-                        "execution_id": execution.id,
-                        "html": result["html"],
-                        "dependencies": result.get("dependencies", []),
-                        "dockerfile": result.get("dockerfile", ""),
-                    }
-                )
+                # Return full result
+                return Response(result)
+
+            # --- FAILURE CASE (Fixed) ---
             else:
                 execution.status = "failed"
-                execution.error_message = result["error"]
+                execution.error_message = result.get("error", "Unknown error")
                 execution.completed_at = timezone.now()
                 execution.save()
-                return Response({"error": result["error"]}, status=400)
+
+                # 🔥 FIX: Ми повертаємо весь result, бо він містить static_analysis!
+                # Раніше ви вручну фільтрували відповідь і губили поле static_analysis.
+                return Response(result, status=500)  # Використовуємо 500 або 400
 
         except Exception as e:
+            traceback.print_exc()
+
             execution.status = "failed"
             execution.error_message = str(e)
             execution.completed_at = timezone.now()
             execution.save()
-            return Response({"error": str(e)}, status=500)
+
+            return Response(
+                {
+                    "success": False,
+                    "error": f"Server Error: {str(e)}",
+                    "static_analysis": {},  # Empty analysis on fatal crash
+                },
+                status=500,
+            )
 
     @action(detail=True, methods=["get"])
     def download(self, request, pk=None):
@@ -175,28 +183,36 @@ class NotebookViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"])
     def analysis(self, request, pk=None):
+        """Get reproducibility analysis files"""
         notebook = self.get_object()
         repro_dir = f"storage/notebooks/{pk}/reproducibility"
 
-        # ✅ ТІЛЬКИ якщо файли є!
+        executor = RExecutor()
+
         data = {
-            "detected_packages": self.executor.detect_packages_from_content(
-                notebook.content
+            "detected_packages": executor.detect_packages_from_content(
+                notebook.content or ""
             ),
         }
 
         if os.path.exists(repro_dir):
+            dockerfile = executor.read_file(repro_dir, "Dockerfile")
+            makefile = executor.read_file(repro_dir, "Makefile")
+            manifest = executor.read_json(repro_dir, "manifest.json")
+
             data.update(
                 {
-                    "dockerfile_preview": self.executor.read_file(
-                        repro_dir, "Dockerfile"
-                    )[:300]
-                    + "...",
-                    "makefile_preview": self.executor.read_file(repro_dir, "Makefile")[
-                        :200
-                    ]
-                    + "...",
-                    "manifest": self.executor.read_json(repro_dir, "manifest.json"),
+                    "dockerfile": dockerfile,
+                    "dockerfile_preview": (
+                        dockerfile[:300] + "..."
+                        if len(dockerfile) > 300
+                        else dockerfile
+                    ),
+                    "makefile": makefile,
+                    "makefile_preview": (
+                        makefile[:200] + "..." if len(makefile) > 200 else makefile
+                    ),
+                    "manifest": manifest,
                 }
             )
 

@@ -1,6 +1,5 @@
 <template>
     <div class="notebook-editor">
-        <!-- Header -->
         <div class="editor-header">
             <input v-model="notebookTitle" @blur="updateTitle" class="notebook-title" placeholder="Untitled Notebook">
 
@@ -15,41 +14,45 @@
                     <i class="fas fa-chart-bar"></i> Analysis
                 </button>
                 <button @click="downloadRmd" class="btn btn-outline">
-                    <i class="fas fa-download"></i> Download .Rmd
+                    <i class="fas fa-download"></i> .Rmd
                 </button>
-                <button @click="downloadPackage" class="btn btn-outline" :disabled="!notebook.id || packageLoading">
+
+                <button @click="downloadPackage" class="btn btn-outline" :disabled="!isPackageReady || packageLoading"
+                    :title="!isPackageReady ? 'Run the notebook first to generate package' : 'Download ZIP'">
                     <i class="fas" :class="packageLoading ? 'fa-spinner fa-spin' : 'fa-box'"></i>
-                    {{ packageLoading ? 'Preparing...' : 'Download Package' }}
+                    {{ packageLoading ? 'Preparing...' : 'Package' }}
                 </button>
             </div>
         </div>
 
-        <!-- Split View: Editor | Output -->
         <div class="editor-split-view">
-            <!-- Left: Editor -->
             <div class="editor-pane">
                 <div class="pane-header">
-                    <h3><i class="fas fa-code"></i> Editor</h3>
+                    <h3><i class="fas fa-code"></i> R Script</h3>
                     <div class="editor-status">
-                        <span v-if="warnings.length > 0" class="warning-badge">
-                            <i class="fas fa-exclamation-triangle"></i> {{ warnings.length }} warnings
+                        <span v-if="adjustedIssues.length > 0" class="warning-badge" @click="showAnalysis = true"
+                            style="cursor: pointer;">
+                            <i class="fas fa-exclamation-triangle"></i> {{ adjustedIssues.length }} warnings
                         </span>
                     </div>
                 </div>
+
                 <textarea ref="editorTextarea" v-model="cleanContent" @input="debouncedSave" class="rmarkdown-editor"
-                    :placeholder="placeholderText" :class="{ 'has-warnings': warnings.length > 0 }"></textarea>
+                    :placeholder="placeholderText" :class="{ 'has-warnings': adjustedIssues.length > 0 }">
+                </textarea>
             </div>
 
-            <!-- Resize Handle -->
             <div class="resize-handle" @mousedown="startResize"></div>
 
-            <!-- Right: Output -->
             <div class="output-pane">
                 <div class="pane-header">
                     <h3><i class="fas fa-file-alt"></i> Output</h3>
                     <div class="output-status">
                         <span v-if="executing" class="status-running">
                             <i class="fas fa-spinner fa-spin"></i> Running...
+                        </span>
+                        <span v-else-if="executionError" class="status-error">
+                            <i class="fas fa-times-circle"></i> Failed
                         </span>
                         <span v-else-if="executionResult" class="status-success">
                             <i class="fas fa-check-circle"></i> Ready
@@ -60,7 +63,31 @@
                     </div>
                 </div>
 
-                <div v-if="executionResult" class="output-content">
+                <div v-if="executionError" class="output-error">
+                    <div class="error-banner">
+                        <i class="fas fa-bomb"></i>
+                        <strong>Execution Failed</strong>
+                    </div>
+
+                    <div class="highlighted-error">
+                        <h4><i class="fas fa-bug"></i> Critical Error:</h4>
+                        <pre>{{ parsedError }}</pre>
+                    </div>
+
+                    <details class="full-log-details">
+                        <summary>Show Full System Log (Debug)</summary>
+                        <pre ref="errorPre" class="error-details">{{ executionError }}</pre>
+                    </details>
+
+                    <div v-if="adjustedIssues.length > 0" class="error-actions">
+                        <p>The analyzer detected potential issues with your code:</p>
+                        <button @click="showAnalysis = true" class="btn btn-sm btn-outline">
+                            <i class="fas fa-search"></i> View Analysis Report ({{ adjustedIssues.length }} issues)
+                        </button>
+                    </div>
+                </div>
+
+                <div v-else-if="executionResult" class="output-content">
                     <iframe :srcdoc="executionResult" class="output-iframe"></iframe>
                 </div>
 
@@ -71,9 +98,8 @@
             </div>
         </div>
 
-        <!-- Analysis Modal - Bottom Right -->
         <Transition name="slide-up">
-            <div v-if="showAnalysis && analysis" class="analysis-modal-bottom">
+            <div v-if="showAnalysis && (analysis || staticAnalysis)" class="analysis-modal-bottom">
                 <div class="modal-header-bottom">
                     <h3><i class="fas fa-chart-bar"></i> Reproducibility Analysis</h3>
                     <button @click="showAnalysis = false" class="modal-close-btn">
@@ -82,12 +108,10 @@
                 </div>
 
                 <div class="modal-body-bottom">
-
-                    <!-- 🔥 Static Analysis Issues -->
-                    <div v-if="staticAnalysis && staticAnalysis.issues.length > 0" class="section">
+                    <div v-if="adjustedIssues.length > 0" class="section">
                         <h4><i class="fas fa-exclamation-triangle"></i> Non-Reproducibility Issues</h4>
                         <div class="issues-summary">
-                            <div v-for="issue in staticAnalysis.issues" :key="issue.category" class="issue-summary-card"
+                            <div v-for="issue in adjustedIssues" :key="issue.category" class="issue-summary-card"
                                 :class="`severity-${issue.severity}`">
                                 <div class="issue-header">
                                     <span class="severity-badge">{{ issue.severity }}</span>
@@ -95,27 +119,26 @@
                                 </div>
                                 <p class="issue-details">{{ issue.details }}</p>
                                 <p class="issue-fix">💡 {{ issue.fix }}</p>
-                                <span class="issue-count">{{ issue.lines.length }} location(s)</span>
+                                <span class="issue-count">
+                                    Line(s): {{issue.lines.map((l: any) => l.line_number).join(', ')}}
+                                </span>
                             </div>
                         </div>
                     </div>
 
-                    <!-- 🔥 Code Viewer з Highlighting -->
-                    <div v-if="staticAnalysis && staticAnalysis.issues.length > 0" class="section">
+                    <div v-if="adjustedIssues.length > 0" class="section">
                         <h4><i class="fas fa-code"></i> Your Code</h4>
-                        <CodeHighlighter :code="cleanContent" :issues="staticAnalysis.issues" />
+                        <CodeHighlighter :code="cleanContent" :issues="adjustedIssues" />
                     </div>
 
-                    <!-- ✅ No Issues Badge -->
-                    <div v-if="staticAnalysis && staticAnalysis.issues.length === 0" class="section">
+                    <div v-if="adjustedIssues.length === 0 && staticAnalysis" class="section">
                         <div class="success-banner">
                             <i class="fas fa-check-circle"></i>
                             <span>No reproducibility issues detected!</span>
                         </div>
                     </div>
 
-                    <!-- r4r Dependencies -->
-                    <div v-if="(analysis.detected_packages || []).length > 0" class="section">
+                    <div v-if="analysis && (analysis.detected_packages || []).length > 0" class="section">
                         <h4><i class="fas fa-cube"></i> R Packages ({{ analysis.detected_packages.length }})</h4>
                         <div class="package-tags">
                             <span v-for="pkg in (analysis.detected_packages || [])" :key="pkg" class="package-tag">
@@ -124,8 +147,7 @@
                         </div>
                     </div>
 
-                    <!-- r4r System Dependencies -->
-                    <div v-if="analysis.manifest && analysis.manifest.system_packages" class="section">
+                    <div v-if="analysis && analysis.manifest && analysis.manifest.system_packages" class="section">
                         <h4><i class="fas fa-server"></i> System Dependencies</h4>
                         <div class="sys-deps">
                             <span v-for="dep in analysis.manifest.system_packages.slice(0, 8)" :key="dep"
@@ -138,16 +160,9 @@
                         </div>
                     </div>
 
-                    <!-- Dockerfile Preview -->
-                    <div v-if="analysis.dockerfile" class="section">
-                        <h4><i class="fab fa-docker"></i> Dockerfile</h4>
-                        <pre class="dockerfile-preview">{{ analysis.dockerfile.substring(0, 300) }}...</pre>
-                    </div>
-
-                    <!-- Actions -->
                     <div class="modal-actions">
                         <button @click="downloadPackageFromModal" class="btn btn-sm btn-primary"
-                            :disabled="packageLoading">
+                            :disabled="!isPackageReady || packageLoading">
                             <i class="fas" :class="packageLoading ? 'fa-spinner fa-spin' : 'fa-download'"></i>
                             {{ packageLoading ? 'Preparing...' : 'Download Reproducibility Package' }}
                         </button>
@@ -159,7 +174,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch, nextTick } from 'vue'
+import { ref, onMounted, watch, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '@/services/api'
 import CodeHighlighter from '@/components/CodeHighlighter.vue'
@@ -177,6 +192,9 @@ const warnings = ref<any[]>([])
 
 const executing = ref(false)
 const executionResult = ref<string | null>(null)
+const executionError = ref<string | null>(null)
+const errorPre = ref<HTMLElement | null>(null)
+
 const analysis = ref<any>(null)
 const staticAnalysis = ref<any>(null)
 const showAnalysis = ref(false)
@@ -187,42 +205,89 @@ let resizeStartX = 0
 let resizeStartWidth = 0
 let isResizing = false
 
-const placeholderText = `## Introduction
+// 🔥 1. Parse Critical Error
+const parsedError = computed(() => {
+    if (!executionError.value) return null;
+    const errorMatch = executionError.value.match(/(Error in[\s\S]+?Execution halted)|(Error:[\s\S]+)|(! cannot open[\s\S]+)/);
+    if (errorMatch) {
+        return errorMatch[0].trim();
+    }
+    const lines = executionError.value.split('\n');
+    return lines.slice(-10).join('\n');
+});
 
-Write your analysis here using Markdown and R code blocks.
+// 🔥 2. Package Ready Check (More robust)
+const isPackageReady = computed(() => {
+    if (!analysis.value) return false
+    // Checks if we have manifest OR dockerfile (generated after run)
+    return !!(analysis.value.manifest || analysis.value.dockerfile)
+})
 
-\`\`\`{r}
-# Load libraries
-library(ggplot2)
+const shouldAutoWrap = computed(() => {
+    return !cleanContent.value.includes('```{r}')
+})
 
-# Your analysis
-data <- mtcars
-summary(data)
-
-# Visualization
-ggplot(data, aes(x=wt, y=mpg)) + 
-  geom_point() +
-  geom_smooth(method='lm')
-\`\`\`
-
-## Results
-
-Add your findings and conclusions here.`
-
-const extractCleanContent = (content: string): string => {
-    if (!content) return ''
-    const yamlRegex = /^---\s*\n[\s\S]*?\n---\s*\n/
-    return content.replace(yamlRegex, '').trim()
-}
-
-const generateFullRmd = (): string => {
+// 🔥 3. Line Offset for warnings
+const totalOffset = computed(() => {
     const yaml = `---
 title: "${notebookTitle.value}"
 output: html_document
 ---
 
 `
-    return yaml + cleanContent.value
+    const wrapperOffset = shouldAutoWrap.value ? 1 : 0
+    return (yaml.split('\n').length - 1) + wrapperOffset
+})
+
+const adjustedIssues = computed(() => {
+    if (!staticAnalysis.value || !staticAnalysis.value.issues) return []
+
+    return staticAnalysis.value.issues.map((issue: any) => ({
+        ...issue,
+        lines: issue.lines.map((line: any) => ({
+            ...line,
+            line_number: Math.max(1, line.line_number - totalOffset.value)
+        })).filter((l: any) => l.line_number > 0)
+    }))
+})
+
+// Pure R Placeholder
+const placeholderText = `# Write your R code here
+library(ggplot2)
+
+data <- mtcars
+summary(data)
+
+ggplot(data, aes(x=wt, y=mpg)) + 
+  geom_point() +
+  geom_smooth(method='lm')
+`
+
+const extractCleanContent = (content: string): string => {
+    if (!content) return ''
+    const yamlRegex = /^---\s*\n[\s\S]*?\n---\s*\n/
+
+    let clean = content.replace(yamlRegex, '').trim()
+
+    if (clean.startsWith('```{r}') && clean.endsWith('```')) {
+        clean = clean.replace(/^```\{r\}\n/, '').replace(/\n```$/, '')
+    }
+
+    return clean
+}
+
+const generateFullRmd = (): string => {
+    const header = `---
+title: "${notebookTitle.value}"
+output: html_document
+---
+
+`
+    if (shouldAutoWrap.value) {
+        return header + '```{r}\n' + cleanContent.value + '\n```'
+    }
+
+    return header + cleanContent.value
 }
 
 watch(
@@ -246,6 +311,7 @@ const loadNotebook = async () => {
             notebook.value = data
             notebookTitle.value = data.title
             cleanContent.value = extractCleanContent(data.content)
+            await loadAnalysis()
         } catch (error) {
             console.error('Failed to load notebook:', error)
         }
@@ -284,41 +350,47 @@ const executeNotebook = async () => {
 
     executing.value = true
     executionResult.value = null
+    executionError.value = null
+    warnings.value = []
 
     try {
         const response = await fetch(
             `http://localhost:8000/api/notebooks/${notebook.value.id}/execute/`,
             {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
+                headers: { 'Content-Type': 'application/json' }
             }
         )
 
-        if (!response.ok) {
-            const error = await response.json()
-            throw new Error(error.error || `HTTP error! status: ${response.status}`)
-        }
-
         const result = await response.json()
-        console.log('Execute result:', result)
-        executionResult.value = result.html
 
-        // 🔥 Store analysis data from execution
         if (result.static_analysis) {
             staticAnalysis.value = result.static_analysis
             warnings.value = result.static_analysis.issues || []
         }
 
-        // Auto-load full analysis
-        if (notebook.value.id) {
-            await loadAnalysis()
+        if (!response.ok) {
+            executionError.value = result.error || `Server Error: ${response.status}`
+            return
         }
+
+        executionResult.value = result.html
+
+        // 🔥 4. Update Analysis state IMMEDIATELY with fresh data from backend
+        // This ensures the button lights up without waiting for a DB reload
+        analysis.value = {
+            ...analysis.value,
+            manifest: result.manifest,
+            detected_packages: result.detected_packages,
+            dockerfile: result.dockerfile,
+        }
+
+        // We can still trigger a background reload if needed
+        await loadAnalysis()
 
     } catch (error: any) {
         console.error('Execution failed:', error)
-        alert(`Execution failed: ${error.message}`)
+        executionError.value = `Network Error: ${error.message}`
     } finally {
         executing.value = false
     }
@@ -332,14 +404,11 @@ const loadAnalysis = async () => {
             `http://localhost:8000/api/notebooks/${notebook.value.id}/reproducibility/`
         )
 
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`)
-        }
+        if (!response.ok) return
 
         const data = await response.json()
         analysis.value = data
 
-        // 🔥 Load static analysis
         if (data.static_analysis) {
             staticAnalysis.value = data.static_analysis
             warnings.value = data.static_analysis.issues || []
@@ -351,7 +420,7 @@ const loadAnalysis = async () => {
 }
 
 const toggleAnalysis = async () => {
-    if (!analysis.value || !notebook.value.id) {
+    if (!analysis.value && !staticAnalysis.value) {
         await loadAnalysis()
     }
     showAnalysis.value = !showAnalysis.value
@@ -363,25 +432,16 @@ const downloadRmd = () => {
 }
 
 const downloadPackage = async () => {
-    if (!notebook.value.id || packageLoading.value) return
+    if (!notebook.value.id || packageLoading.value || !isPackageReady.value) return
 
     packageLoading.value = true
 
     try {
-        const checkResponse = await fetch(
-            `http://localhost:8000/api/notebooks/${notebook.value.id}/reproducibility/`
-        )
-
-        if (!checkResponse.ok) {
-            alert('Please run the notebook first to generate the reproducibility package!')
-            return
-        }
-
         const url = `http://localhost:8000/api/notebooks/${notebook.value.id}/download_package/`
         window.open(url, '_blank')
     } catch (error) {
         console.error('Download failed:', error)
-        alert('Failed to download package. Please try again.')
+        alert('Failed to download package.')
     } finally {
         setTimeout(() => {
             packageLoading.value = false
@@ -474,6 +534,7 @@ onMounted(() => {
 .editor-actions {
     display: flex;
     gap: 0.5rem;
+    align-items: center;
 }
 
 .editor-split-view {
@@ -513,7 +574,7 @@ onMounted(() => {
 .editor-status {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 1rem;
 }
 
 .warning-badge {
@@ -538,6 +599,11 @@ onMounted(() => {
 
 .status-success {
     color: #10b981;
+}
+
+.status-error {
+    color: #dc2626;
+    font-weight: 600;
 }
 
 .status-empty {
@@ -587,6 +653,82 @@ onMounted(() => {
     background: white;
 }
 
+.output-error {
+    padding: 2rem;
+    background: #fff5f5;
+    height: 100%;
+    overflow-y: auto;
+}
+
+.error-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: #b91c1c;
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #fecaca;
+}
+
+/* 🔥 Highlighted Error Box */
+.highlighted-error {
+    background: #fee2e2;
+    border-left: 5px solid #dc2626;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border-radius: 4px;
+}
+
+.highlighted-error h4 {
+    margin: 0 0 0.5rem 0;
+    color: #991b1b;
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.highlighted-error pre {
+    margin: 0;
+    white-space: pre-wrap;
+    font-family: 'JetBrains Mono', monospace;
+    color: #7f1d1d;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+/* Details/Summary styles */
+.full-log-details summary {
+    cursor: pointer;
+    color: #6b7280;
+    font-size: 0.85rem;
+    margin-bottom: 0.5rem;
+    user-select: none;
+}
+
+.full-log-details summary:hover {
+    color: #374151;
+}
+
+.error-details {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    background: #1e1e1e;
+    color: #9ca3af;
+    padding: 1rem;
+    border-radius: 8px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.error-actions {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid #fecaca;
+    color: #7f1d1d;
+}
+
 .output-empty {
     flex: 1;
     display: flex;
@@ -607,7 +749,7 @@ onMounted(() => {
     font-size: 1rem;
 }
 
-/* Analysis Modal - Bottom Right */
+/* Analysis Modal */
 .analysis-modal-bottom {
     position: fixed;
     bottom: 20px;
@@ -688,7 +830,6 @@ onMounted(() => {
     gap: 0.5rem;
 }
 
-/* 🔥 Issues Summary */
 .issues-summary {
     display: flex;
     flex-direction: column;
@@ -750,7 +891,6 @@ onMounted(() => {
     font-weight: 600;
 }
 
-/* Success Banner */
 .success-banner {
     display: flex;
     align-items: center;
@@ -766,7 +906,6 @@ onMounted(() => {
     font-size: 24px;
 }
 
-/* Package Tags */
 .package-tags {
     display: flex;
     flex-wrap: wrap;
@@ -783,7 +922,6 @@ onMounted(() => {
     border: 1px solid #e5e7eb;
 }
 
-/* System Dependencies */
 .sys-deps {
     display: flex;
     flex-wrap: wrap;
@@ -807,19 +945,6 @@ onMounted(() => {
     align-self: center;
 }
 
-/* Dockerfile Preview */
-.dockerfile-preview {
-    background: #1e1e1e;
-    color: #d4d4d4;
-    padding: 12px;
-    border-radius: 6px;
-    font-family: monospace;
-    font-size: 12px;
-    overflow-x: auto;
-    margin: 0;
-}
-
-/* Actions */
 .modal-actions {
     margin-top: 1.5rem;
     padding-top: 1rem;
@@ -891,7 +1016,6 @@ onMounted(() => {
     justify-content: center;
 }
 
-/* Slide Up Animation */
 .slide-up-enter-active,
 .slide-up-leave-active {
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);

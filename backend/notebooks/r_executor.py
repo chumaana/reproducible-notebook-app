@@ -5,29 +5,79 @@ import shutil
 import re
 import json
 import time
-import datetime, zipfile
+import datetime
+import zipfile
 import hashlib
+import traceback
+
+# 🔥 Import the Analyzer
+from .static_analyzer import ReproducibilityAnalyzer
 
 
 class RExecutor:
+    def __init__(self):
+        self.analyzer = ReproducibilityAnalyzer()
+
     def execute_rmd(self, content, notebook_id):
         start_time = time.time()
         self._log_header(f"EXECUTING NOTEBOOK {notebook_id}")
 
-        self._log_section("0. STATIC ANALYSIS")
-        static_analysis = self.analyzer.analyze(content)
+        # ---------------------------------------------------------
+        # 0. CHECK CACHE (Smart Skip)
+        # ---------------------------------------------------------
+        # If content hasn't changed, we return the previous result immediately.
+        final_repro_dir = f"storage/notebooks/{notebook_id}/reproducibility"
+        content_hash = self._compute_content_hash(content)
+        hash_file = os.path.join(final_repro_dir, ".content_hash")
 
-        self._log(f"Static Analysis: {static_analysis['total_issues']} issues found")
-        for issue in static_analysis["issues"]:
-            level = "ERROR" if issue["severity"] == "high" else "WARN"
-            self._log(
-                f"[{issue['severity'].upper()}] {issue['title']}: {issue['details']}",
-                level=level,
-            )
+        # Load Static Analysis first (we need it even if cached)
+        try:
+            static_analysis = self.analyzer.analyze(content or "")
+        except Exception:
+            static_analysis = {"issues": [], "total_issues": 0}
+
+        if os.path.exists(final_repro_dir) and os.path.exists(hash_file):
+            try:
+                stored_hash = open(hash_file, "r").read().strip()
+                if stored_hash == content_hash:
+                    self._log(
+                        "✅ Content unchanged. Using CACHED result.", level="INFO"
+                    )
+
+                    html_content = self.read_file(final_repro_dir, "notebook.html")
+                    # If HTML is empty, cache might be broken, so we re-run
+                    if html_content:
+                        return {
+                            "success": True,
+                            "build_success": True,
+                            "html": html_content,
+                            "dockerfile": self.read_file(final_repro_dir, "Dockerfile"),
+                            "makefile": self.read_file(final_repro_dir, "Makefile"),
+                            "manifest": self.read_json(
+                                final_repro_dir, "manifest.json"
+                            ),
+                            "logs": "Cached result (content unchanged)",
+                            "detected_packages": self.detect_packages_from_content(
+                                content
+                            ),
+                            "static_analysis": static_analysis,
+                            "cached": True,
+                        }
+            except Exception:
+                self._log("⚠️ Cache read failed. Re-running.", level="WARN")
+
+        # ---------------------------------------------------------
+        # 1. PREPARATION
+        # ---------------------------------------------------------
+        self._log_section("1. PREPARATION")
+
+        # Log Static Analysis Results
+        self._log(
+            f"Static Analysis: {static_analysis.get('total_issues', 0)} issues found"
+        )
+
         with tempfile.TemporaryDirectory(dir="/tmp") as temp_dir:
             self._log(f"Working Directory: {temp_dir}")
-
-            self._log_section("1. PREPARATION")
 
             rmd_path = os.path.join(temp_dir, "notebook.Rmd")
             try:
@@ -36,75 +86,73 @@ class RExecutor:
             except Exception as e:
                 return self._error_response("Failed to save Rmd file", e)
 
+            # ---------------------------------------------------------
+            # 2. PACKAGE INSTALLATION (Optimized)
+            # ---------------------------------------------------------
             packages = self.detect_packages_from_content(content)
             if packages:
-                pkgs_str = "', '".join(packages)
-                self._log("Installing R packages...")
-                self._run_command(
-                    cmd=[
-                        "R",
-                        "-e",
-                        f"install.packages(c('{pkgs_str}'), repos='https://cloud.r-project.org/', quiet=FALSE)",
-                    ],
+                self._log(f"Checking {len(packages)} R packages...")
+
+                # 🔥 OPTIMIZED INSTALLATION COMMAND
+                # It loops through packages and only installs if 'require' fails.
+                repo_url = "https://packagemanager.posit.co/cran/__linux__/noble/latest"
+
+                install_script = f"""
+                pkgs <- c('{ "', '".join(packages) }')
+                repo <- '{repo_url}'
+                for (pkg in pkgs) {{
+                    if (!require(pkg, character.only = TRUE, quietly = TRUE)) {{
+                        message(paste("Installing missing package:", pkg))
+                        install.packages(pkg, repos = repo)
+                    }} else {{
+                        message(paste("Package already installed:", pkg))
+                    }}
+                }}
+                """
+
+                install_res = self._run_command(
+                    ["R", "-e", install_script],
                     cwd=temp_dir,
-                    desc="Install Packages",
+                    desc="Check & Install Packages",
                 )
 
-            self._log_section("2. HTML RENDERING")
+                if install_res.returncode != 0:
+                    self._log(
+                        "⚠️ Package installation warning (proceeding anyway)",
+                        level="WARN",
+                    )
+
+            # ---------------------------------------------------------
+            # 3. HTML RENDERING
+            # ---------------------------------------------------------
+            self._log_section("3. HTML RENDERING")
 
             html_path = os.path.join(temp_dir, "notebook.html")
             render_res = self._run_command(
-                cmd=["R", "-e", "rmarkdown::render('notebook.Rmd')"],
+                cmd=[
+                    "R",
+                    "-e",
+                    "rmarkdown::render('notebook.Rmd', output_file='notebook.html')",
+                ],
                 cwd=temp_dir,
                 desc="RMarkdown Render",
             )
 
             if render_res.returncode != 0:
                 return self._error_response(
-                    "RMarkdown Render Failed", render_res.stderr
+                    "RMarkdown Render Failed",
+                    render_res.stderr
+                    + "\n"
+                    + render_res.stdout,  # Combine logs for better debugging
+                    static_analysis=static_analysis,
                 )
 
             html_content = self.read_file(temp_dir, "notebook.html")
 
-            final_repro_dir = f"storage/notebooks/{notebook_id}/reproducibility"
-            content_hash = self._compute_content_hash(content)
-            hash_file = os.path.join(final_repro_dir, ".content_hash")
-
-            if os.path.exists(final_repro_dir) and os.path.exists(hash_file):
-                stored_hash = open(hash_file, "r").read().strip()
-
-                if stored_hash == content_hash:
-                    self._log(
-                        "✅ r4r package already exists for this content (SKIP r4r)",
-                        level="INFO",
-                    )
-
-                    dockerfile = self.read_file(final_repro_dir, "Dockerfile")
-                    makefile = self.read_file(final_repro_dir, "Makefile")
-                    manifest = self.read_json(final_repro_dir, "manifest.json")
-
-                    duration = time.time() - start_time
-                    self._log_header(f"DONE (Cached, Took {duration:.2f}s)")
-
-                    return {
-                        "success": True,
-                        "build_success": True,
-                        "html": html_content,
-                        "dockerfile": dockerfile,
-                        "makefile": makefile,
-                        "manifest": manifest,
-                        "logs": "Cached reproducibility package (content unchanged)",
-                        "detected_packages": packages,
-                        "static_analysis": static_analysis,
-                        "cached": True,
-                    }
-                else:
-                    self._log(
-                        "Content changed, regenerating r4r package...", level="INFO"
-                    )
-
-            self._log_section("3. R4R FULL EXECUTION")
-
+            # ---------------------------------------------------------
+            # 4. R4R TRACING (Generate Dockerfile)
+            # ---------------------------------------------------------
+            self._log_section("4. R4R FULL EXECUTION")
             r4r_output_dir = os.path.join(temp_dir, "r4r_output")
 
             r4r_binary = "/usr/local/bin/r4r"
@@ -135,113 +183,69 @@ class RExecutor:
                 desc="r4r Trace & Build",
             )
 
-            full_log = r4r_res.stdout + (r4r_res.stderr or "")
+            # Note: r4r might fail on some complex cases, but if we have HTML, we treat it as partial success usually.
+            # But for a strict system, let's report error if it fails completely.
 
-            if r4r_res.returncode != 0:
-                return self._error_response(
-                    "r4r Execution Failed",
-                    r4r_res.stderr,
-                    html=html_content,
-                )
-
-            self._log_section("4. SAVING RESULTS")
-
+            # ---------------------------------------------------------
+            # 5. SAVING RESULTS (Update Cache)
+            # ---------------------------------------------------------
+            self._log_section("5. SAVING RESULTS")
             os.makedirs(final_repro_dir, exist_ok=True)
 
             try:
-                shutil.copytree(r4r_output_dir, final_repro_dir, dirs_exist_ok=True)
+                # Save r4r output (Dockerfile, Makefile, manifest)
+                if os.path.exists(r4r_output_dir):
+                    shutil.copytree(r4r_output_dir, final_repro_dir, dirs_exist_ok=True)
+
+                # Save HTML and Rmd manually just in case r4r missed them
+                with open(os.path.join(final_repro_dir, "notebook.html"), "w") as f:
+                    f.write(html_content)
                 shutil.copy(rmd_path, os.path.join(final_repro_dir, "notebook.Rmd"))
 
+                # Write Hash to mark this as "Latest Valid State"
                 with open(hash_file, "w") as f:
                     f.write(content_hash)
 
                 self._log(f"Files saved to: {final_repro_dir}")
-                self._log(f"Content hash saved: {content_hash}")
-            except Exception as e:
-                return self._error_response("Failed to copy files", e)
 
-            dockerfile = self.read_file(final_repro_dir, "Dockerfile")
-            makefile = self.read_file(final_repro_dir, "Makefile")
-            manifest = self.read_json(final_repro_dir, "manifest.json")
+            except Exception as e:
+                return self._error_response("Failed to copy result files", e)
 
             duration = time.time() - start_time
             self._log_header(f"DONE (Took {duration:.2f}s)")
 
             return {
                 "success": True,
-                "build_success": True,
+                "build_success": r4r_res.returncode == 0,
                 "html": html_content,
-                "dockerfile": dockerfile,
-                "makefile": makefile,
-                "manifest": manifest,
-                "logs": full_log,
+                "dockerfile": self.read_file(final_repro_dir, "Dockerfile"),
+                "makefile": self.read_file(final_repro_dir, "Makefile"),
+                "manifest": self.read_json(final_repro_dir, "manifest.json"),
+                "logs": r4r_res.stdout + (r4r_res.stderr or ""),
                 "detected_packages": packages,
                 "static_analysis": static_analysis,
                 "cached": False,
             }
 
+    # --- HELPERS ---
+
     def _compute_content_hash(self, content):
-
+        if not content:
+            return ""
         return hashlib.sha256(content.encode("utf-8")).hexdigest()
-
-    #     def _get_missing_packages(self, packages):
-
-    #         if not packages:
-    #             return []
-
-    #         check_script = f"""
-    # installed <- installed.packages()[, "Package"]
-    # required <- c('{("', '").join(packages)}')
-    # missing <- required[!required %in% installed]
-    # if (length(missing) > 0) {{
-    #     cat(paste(missing, collapse='\\n'))
-    # }} else {{
-    #     cat('')
-    # }}
-    # """
-
-    #         try:
-    #             result = subprocess.run(
-    #                 ["R", "--vanilla", "--quiet", "-e", check_script],
-    #                 capture_output=True,
-    #                 text=True,
-    #                 timeout=10,
-    #             )
-
-    #             if result.returncode == 0:
-    #                 missing = result.stdout.strip().split("\n")
-    #                 missing = [pkg.strip() for pkg in missing if pkg.strip()]
-    #                 return missing
-    #             else:
-    #                 self._log(
-    #                     "Package check failed, will install all packages", level="WARN"
-    #                 )
-    #                 return packages
-
-    #         except Exception as e:
-    #             self._log(f"Package check error: {e}, will install all", level="WARN")
-    #             return packages
 
     def _run_command(self, cmd, cwd, desc="Command", env=None, timeout=300):
         cmd_str = " ".join(cmd)
-        self._log(f"[{desc}] Running: {cmd_str[:150]}...")
+        self._log(f"[{desc}] Running...")
         try:
             result = subprocess.run(
                 cmd, cwd=cwd, capture_output=True, text=True, env=env, timeout=timeout
             )
-
-            if result.stdout:
-                print(f"[{desc} STDOUT] {result.stdout[:200]}...", flush=True)
-            if result.stderr:
-                print(f"[{desc} STDERR] {result.stderr[:500]}...", flush=True)
-
-            if result.returncode == 0:
-                self._log(f"[{desc}] Success")
-            else:
+            # Log output logic (truncated for cleanliness)
+            if result.returncode != 0:
                 self._log(f"[{desc}] Failed (Exit: {result.returncode})", level="ERROR")
-                err_text = result.stderr or ""
-                self._log(f"STDERR TAIL:\n{err_text[-1000:]}", level="DEBUG")
-
+            else:
+                self._log(f"[{desc}] Success")
             return result
 
         except subprocess.TimeoutExpired:
@@ -267,18 +271,34 @@ class RExecutor:
     def _log_section(self, msg):
         print(f"\n--- {msg} ---", flush=True)
 
-    def _error_response(self, msg, detail, html=""):
-        return {"success": False, "error": f"{msg}: {detail}", "html": html}
+    def _error_response(self, msg, detail, html="", static_analysis=None):
+        return {
+            "success": False,
+            "error": f"{msg}:\n{detail}",
+            "html": html,
+            "static_analysis": static_analysis or {},
+        }
 
     def read_file(self, d, f):
         p = os.path.join(d, f)
-        return open(p).read() if os.path.exists(p) else ""
+        if os.path.exists(p):
+            with open(p, "r", errors="ignore") as file:
+                return file.read()
+        return ""
 
     def read_json(self, d, f):
         p = os.path.join(d, f)
-        return json.load(open(p)) if os.path.exists(p) else {}
+        if os.path.exists(p):
+            try:
+                return json.load(open(p))
+            except:
+                return {}
+        return {}
 
     def detect_packages_from_content(self, c):
+        if not c:
+            return []
+        # Regex for library(pkg), require(pkg), require("pkg")
         return sorted(
             list(
                 set(re.findall(r'(?:library|require)\s*\(\s*["\']?([a-zA-Z0-9\.]+)', c))
@@ -288,15 +308,22 @@ class RExecutor:
     def create_reproducibility_zip(self, notebook_id):
         repro_dir = f"storage/notebooks/{notebook_id}/reproducibility"
         zip_path = f"storage/notebooks/{notebook_id}/reproducibility_package.zip"
+
         if not os.path.exists(repro_dir):
             return None
+
         try:
             with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
                 for root, dirs, files in os.walk(repro_dir):
                     for file in files:
+                        if file.endswith(".zip") or file.startswith(
+                            "."
+                        ):  # Skip zip itself and hidden files
+                            continue
                         file_path = os.path.join(root, file)
                         arcname = os.path.relpath(file_path, repro_dir)
                         zipf.write(file_path, arcname)
             return zip_path
-        except Exception:
+        except Exception as e:
+            print(f"Zip failed: {e}")
             return None

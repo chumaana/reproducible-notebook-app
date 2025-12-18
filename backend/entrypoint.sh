@@ -12,6 +12,9 @@ fi
 
 
 chown -R r4r:r4r /app/storage
-
+export HOME="/home/r4r"
+export USER="r4r"
+export LOGNAME="r4r"
+export VISUAL="/bin/true"
 echo "Starting application as user 'r4r'..."
 exec gosu r4r "$@"
