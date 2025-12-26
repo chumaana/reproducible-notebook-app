@@ -9,7 +9,6 @@ class ReproducibilityAnalyzer:
         lines = rmd_content.split("\n")
         issues = []
 
-        # 1. Random functions without set.seed()
         random_issues = self._detect_random_with_lines(lines)
         has_seed = any("set.seed" in line for line in lines)
         if random_issues and not has_seed:
@@ -24,7 +23,6 @@ class ReproducibilityAnalyzer:
                 }
             )
 
-        # 2. Timestamps
         timestamp_lines = self._find_pattern_lines(lines, r"Sys\.(time|Date|timezone)")
         if timestamp_lines:
             issues.append(
@@ -38,7 +36,6 @@ class ReproducibilityAnalyzer:
                 }
             )
 
-        # 3. Absolute paths
         path_lines = self._find_absolute_paths(lines)
         if path_lines:
             issues.append(
@@ -52,7 +49,6 @@ class ReproducibilityAnalyzer:
                 }
             )
 
-        # 4. External downloads
         download_lines = self._find_pattern_lines(lines, r"download\.file|url\(")
         if download_lines:
             issues.append(
@@ -66,7 +62,6 @@ class ReproducibilityAnalyzer:
                 }
             )
 
-        # 🔥 5. Hardcoded Package Installation (NEW)
         install_lines = self._find_pattern_lines(lines, r"install\.packages\s*\(")
         if install_lines:
             issues.append(
@@ -80,7 +75,6 @@ class ReproducibilityAnalyzer:
                 }
             )
 
-        # 🔥 6. Working Directory Changes (NEW)
         setwd_lines = self._find_pattern_lines(lines, r"setwd\s*\(")
         if setwd_lines:
             issues.append(
@@ -94,7 +88,6 @@ class ReproducibilityAnalyzer:
                 }
             )
 
-        # 🔥 7. Interactive Commands (NEW)
         interactive_lines = self._find_pattern_lines(
             lines, r"\b(View|browser|edit|file\.choose)\s*\("
         )
@@ -110,8 +103,6 @@ class ReproducibilityAnalyzer:
                 }
             )
 
-        # 🔥 8. Secrets / API Keys (NEW)
-        # Шукає патерни типу "sk_live_...", "api_key = '...'"
         secret_lines = self._find_secrets(lines)
         if secret_lines:
             issues.append(
@@ -129,8 +120,6 @@ class ReproducibilityAnalyzer:
             "issues": issues,
             "total_issues": sum(len(i["lines"]) for i in issues),
         }
-
-    # --- HELPERS ---
 
     def _detect_random_with_lines(self, lines: List[str]) -> List[Dict]:
         random_patterns = [
@@ -160,20 +149,17 @@ class ReproducibilityAnalyzer:
 
     def _find_absolute_paths(self, lines: List[str]) -> List[Dict]:
         found = []
-        # Matches: "C:/..." or "/Users/..."
         path_pattern = r'["\'](?:[a-zA-Z]:[\\/]|[\\/])[^"\']+["\']'
 
         for line_num, line in enumerate(lines, start=1):
             if line.strip().startswith("#"):
                 continue
 
-            # Skip library calls like library("stats") which look like paths roughly but aren't
             if "library(" in line or "require(" in line:
                 continue
 
             matches = re.findall(path_pattern, line)
             for match in matches:
-                # Ignore URLs
                 if "://" in match or "http" in match:
                     continue
                 found.append(
@@ -183,10 +169,9 @@ class ReproducibilityAnalyzer:
 
     def _find_secrets(self, lines: List[str]) -> List[Dict]:
         found = []
-        # Regex для ключів Stripe, AWS, та загальних "key = '...'"
         patterns = [
-            r"sk_live_[0-9a-zA-Z]{20,}",  # Stripe/Generic keys
-            r"(?:api_key|access_token|secret)\s*=\s*['\"][a-zA-Z0-9_\-]{20,}['\"]",  # Assignment
+            r"sk_live_[0-9a-zA-Z]{20,}",
+            r"(?:api_key|access_token|secret)\s*=\s*['\"][a-zA-Z0-9_\-]{20,}['\"]",
         ]
 
         for line_num, line in enumerate(lines, start=1):
@@ -194,7 +179,6 @@ class ReproducibilityAnalyzer:
                 continue
             for p in patterns:
                 if re.search(p, line):
-                    # Mask the secret in the log/output for safety
                     masked_code = re.sub(p, "***SECRET***", line.strip())
                     found.append({"line_number": line_num, "code": masked_code})
         return found

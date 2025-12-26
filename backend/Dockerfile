@@ -9,6 +9,7 @@ WORKDIR /workspace
 RUN git clone https://github.com/r-tooling/r4r.git .
 RUN BUILD_TYPE=Release make clean install
 
+
 FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -40,10 +41,20 @@ RUN apt-get update -y && apt-get -y install \
     libudunits2-dev libmagick++-dev gsfonts unixodbc-dev \
     linux-libc-dev libgmp3-dev libmpfr-dev
 
+
+RUN apt-get update && apt-get install -y \
+    libopencv-dev libtirpc-dev \
+    && rm -rf /var/lib/apt/lists/* 
 RUN R -e "install.packages('rmarkdown', repos='https://cran.rstudio.com/')"
 
 
 COPY --from=builder /usr/local/bin/r4r /usr/local/bin/r4r
+COPY libs/* /usr/local/lib/
+RUN ldconfig
+COPY rdiff /usr/local/bin/r-diff
+RUN chmod +x /usr/local/bin/r-diff
+
+RUN r-diff --help
 
 ARG USERNAME=r4r
 ARG USER_UID=1001
@@ -59,6 +70,8 @@ RUN groupadd -g $USER_GID $USERNAME && \
 RUN gosu r4r R -e 'dir.create(unlist(strsplit(Sys.getenv("R_LIBS_USER"), .Platform$path.sep))[1L], recursive=TRUE)'    
 WORKDIR /app
 
+
+
 RUN python3 -m venv /opt/venv && \
     chown -R $USERNAME:$USERNAME /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
@@ -69,8 +82,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN mkdir -p /app/storage/notebooks && \
     chown -R $USERNAME:$USERNAME /app/storage
 
+
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
+
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["python3", "manage.py", "runserver", "0.0.0.0:8000"]

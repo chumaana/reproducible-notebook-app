@@ -75,18 +75,23 @@ const loading = ref(false)
 const loadNotebooks = async () => {
     loading.value = true
     try {
-        notebooks.value = await api.getNotebooks()
+        console.log('🔍 Fetching notebooks...')
+        const data = await api.getNotebooks()
+        notebooks.value = data
     } catch (error) {
-        console.error('Error loading notebooks:', error)
+        console.error(' Error loading notebooks:', error)
+        console.error('Error details:', error.response?.data)
+    } finally {
+        loading.value = false
     }
-    loading.value = false
 }
 
-const openNotebook = (id: string) => {
+
+const openNotebook = (id: number) => {
     router.push(`/notebook/${id}`)
 }
 
-const deleteNotebook = async (id: string) => {
+const deleteNotebook = async (id: number) => {
     if (!confirm('Are you sure you want to delete this notebook?')) return
 
     try {

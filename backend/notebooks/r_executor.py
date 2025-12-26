@@ -10,7 +10,6 @@ import zipfile
 import hashlib
 import traceback
 
-# 🔥 Import the Analyzer
 from .static_analyzer import ReproducibilityAnalyzer
 
 
@@ -22,15 +21,10 @@ class RExecutor:
         start_time = time.time()
         self._log_header(f"EXECUTING NOTEBOOK {notebook_id}")
 
-        # ---------------------------------------------------------
-        # 0. CHECK CACHE (Smart Skip)
-        # ---------------------------------------------------------
-        # If content hasn't changed, we return the previous result immediately.
         final_repro_dir = f"storage/notebooks/{notebook_id}/reproducibility"
         content_hash = self._compute_content_hash(content)
         hash_file = os.path.join(final_repro_dir, ".content_hash")
 
-        # Load Static Analysis first (we need it even if cached)
         try:
             static_analysis = self.analyzer.analyze(content or "")
         except Exception:
@@ -40,12 +34,9 @@ class RExecutor:
             try:
                 stored_hash = open(hash_file, "r").read().strip()
                 if stored_hash == content_hash:
-                    self._log(
-                        "✅ Content unchanged. Using CACHED result.", level="INFO"
-                    )
+                    self._log("Content unchanged. Using CACHED result.", level="INFO")
 
                     html_content = self.read_file(final_repro_dir, "notebook.html")
-                    # If HTML is empty, cache might be broken, so we re-run
                     if html_content:
                         return {
                             "success": True,
@@ -64,14 +55,10 @@ class RExecutor:
                             "cached": True,
                         }
             except Exception:
-                self._log("⚠️ Cache read failed. Re-running.", level="WARN")
+                self._log("Cache read failed. Re-running.", level="WARN")
 
-        # ---------------------------------------------------------
-        # 1. PREPARATION
-        # ---------------------------------------------------------
         self._log_section("1. PREPARATION")
 
-        # Log Static Analysis Results
         self._log(
             f"Static Analysis: {static_analysis.get('total_issues', 0)} issues found"
         )
@@ -86,15 +73,10 @@ class RExecutor:
             except Exception as e:
                 return self._error_response("Failed to save Rmd file", e)
 
-            # ---------------------------------------------------------
-            # 2. PACKAGE INSTALLATION (Optimized)
-            # ---------------------------------------------------------
             packages = self.detect_packages_from_content(content)
             if packages:
                 self._log(f"Checking {len(packages)} R packages...")
 
-                # 🔥 OPTIMIZED INSTALLATION COMMAND
-                # It loops through packages and only installs if 'require' fails.
                 repo_url = "https://packagemanager.posit.co/cran/__linux__/noble/latest"
 
                 install_script = f"""
@@ -118,13 +100,10 @@ class RExecutor:
 
                 if install_res.returncode != 0:
                     self._log(
-                        "⚠️ Package installation warning (proceeding anyway)",
+                        "Package installation warning (proceeding anyway)",
                         level="WARN",
                     )
 
-            # ---------------------------------------------------------
-            # 3. HTML RENDERING
-            # ---------------------------------------------------------
             self._log_section("3. HTML RENDERING")
 
             html_path = os.path.join(temp_dir, "notebook.html")
@@ -141,17 +120,12 @@ class RExecutor:
             if render_res.returncode != 0:
                 return self._error_response(
                     "RMarkdown Render Failed",
-                    render_res.stderr
-                    + "\n"
-                    + render_res.stdout,  # Combine logs for better debugging
+                    render_res.stderr + "\n" + render_res.stdout,
                     static_analysis=static_analysis,
                 )
 
             html_content = self.read_file(temp_dir, "notebook.html")
 
-            # ---------------------------------------------------------
-            # 4. R4R TRACING (Generate Dockerfile)
-            # ---------------------------------------------------------
             self._log_section("4. R4R FULL EXECUTION")
             r4r_output_dir = os.path.join(temp_dir, "r4r_output")
 
@@ -183,26 +157,17 @@ class RExecutor:
                 desc="r4r Trace & Build",
             )
 
-            # Note: r4r might fail on some complex cases, but if we have HTML, we treat it as partial success usually.
-            # But for a strict system, let's report error if it fails completely.
-
-            # ---------------------------------------------------------
-            # 5. SAVING RESULTS (Update Cache)
-            # ---------------------------------------------------------
             self._log_section("5. SAVING RESULTS")
             os.makedirs(final_repro_dir, exist_ok=True)
 
             try:
-                # Save r4r output (Dockerfile, Makefile, manifest)
                 if os.path.exists(r4r_output_dir):
                     shutil.copytree(r4r_output_dir, final_repro_dir, dirs_exist_ok=True)
 
-                # Save HTML and Rmd manually just in case r4r missed them
                 with open(os.path.join(final_repro_dir, "notebook.html"), "w") as f:
                     f.write(html_content)
                 shutil.copy(rmd_path, os.path.join(final_repro_dir, "notebook.Rmd"))
 
-                # Write Hash to mark this as "Latest Valid State"
                 with open(hash_file, "w") as f:
                     f.write(content_hash)
 
@@ -227,8 +192,6 @@ class RExecutor:
                 "cached": False,
             }
 
-    # --- HELPERS ---
-
     def _compute_content_hash(self, content):
         if not content:
             return ""
@@ -241,7 +204,6 @@ class RExecutor:
             result = subprocess.run(
                 cmd, cwd=cwd, capture_output=True, text=True, env=env, timeout=timeout
             )
-            # Log output logic (truncated for cleanliness)
             if result.returncode != 0:
                 self._log(f"[{desc}] Failed (Exit: {result.returncode})", level="ERROR")
             else:
@@ -298,7 +260,6 @@ class RExecutor:
     def detect_packages_from_content(self, c):
         if not c:
             return []
-        # Regex for library(pkg), require(pkg), require("pkg")
         return sorted(
             list(
                 set(re.findall(r'(?:library|require)\s*\(\s*["\']?([a-zA-Z0-9\.]+)', c))

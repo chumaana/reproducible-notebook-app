@@ -205,7 +205,6 @@ let resizeStartX = 0
 let resizeStartWidth = 0
 let isResizing = false
 
-// 🔥 1. Parse Critical Error
 const parsedError = computed(() => {
     if (!executionError.value) return null;
     const errorMatch = executionError.value.match(/(Error in[\s\S]+?Execution halted)|(Error:[\s\S]+)|(! cannot open[\s\S]+)/);
@@ -216,10 +215,8 @@ const parsedError = computed(() => {
     return lines.slice(-10).join('\n');
 });
 
-// 🔥 2. Package Ready Check (More robust)
 const isPackageReady = computed(() => {
     if (!analysis.value) return false
-    // Checks if we have manifest OR dockerfile (generated after run)
     return !!(analysis.value.manifest || analysis.value.dockerfile)
 })
 
@@ -227,7 +224,6 @@ const shouldAutoWrap = computed(() => {
     return !cleanContent.value.includes('```{r}')
 })
 
-// 🔥 3. Line Offset for warnings
 const totalOffset = computed(() => {
     const yaml = `---
 title: "${notebookTitle.value}"
@@ -251,7 +247,6 @@ const adjustedIssues = computed(() => {
     }))
 })
 
-// Pure R Placeholder
 const placeholderText = `# Write your R code here
 library(ggplot2)
 
@@ -354,30 +349,20 @@ const executeNotebook = async () => {
     warnings.value = []
 
     try {
-        const response = await fetch(
-            `http://localhost:8000/api/notebooks/${notebook.value.id}/execute/`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            }
-        )
-
-        const result = await response.json()
+        const result = await api.executeNotebook(notebook.value.id)
 
         if (result.static_analysis) {
             staticAnalysis.value = result.static_analysis
             warnings.value = result.static_analysis.issues || []
         }
 
-        if (!response.ok) {
-            executionError.value = result.error || `Server Error: ${response.status}`
+        if (result.success === false) {
+            executionError.value = result.error || 'Execution failed'
             return
         }
 
         executionResult.value = result.html
 
-        // 🔥 4. Update Analysis state IMMEDIATELY with fresh data from backend
-        // This ensures the button lights up without waiting for a DB reload
         analysis.value = {
             ...analysis.value,
             manifest: result.manifest,
@@ -385,28 +370,33 @@ const executeNotebook = async () => {
             dockerfile: result.dockerfile,
         }
 
-        // We can still trigger a background reload if needed
         await loadAnalysis()
 
     } catch (error: any) {
         console.error('Execution failed:', error)
-        executionError.value = `Network Error: ${error.message}`
+
+        if (error.response && error.response.data) {
+            executionError.value = error.response.data.error || JSON.stringify(error.response.data)
+
+            if (error.response.data.static_analysis) {
+                staticAnalysis.value = error.response.data.static_analysis
+                warnings.value = error.response.data.static_analysis.issues || []
+            }
+        } else {
+            executionError.value = `Network Error: ${error.message}`
+        }
     } finally {
         executing.value = false
     }
+
+
 }
+
 
 const loadAnalysis = async () => {
     if (!notebook.value.id) return
-
     try {
-        const response = await fetch(
-            `http://localhost:8000/api/notebooks/${notebook.value.id}/reproducibility/`
-        )
-
-        if (!response.ok) return
-
-        const data = await response.json()
+        const data = await api.getReproducibilityAnalysis(notebook.value.id)
         analysis.value = data
 
         if (data.static_analysis) {
@@ -430,15 +420,23 @@ const downloadRmd = () => {
     const fullContent = generateFullRmd()
     downloadFile(fullContent, `${notebookTitle.value}.Rmd`, 'text/plain')
 }
-
 const downloadPackage = async () => {
     if (!notebook.value.id || packageLoading.value || !isPackageReady.value) return
 
     packageLoading.value = true
 
     try {
-        const url = `http://localhost:8000/api/notebooks/${notebook.value.id}/download_package/`
-        window.open(url, '_blank')
+        const blob = await api.downloadPackage(notebook.value.id)
+
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `notebook_${notebook.value.id}_package.zip`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+
     } catch (error) {
         console.error('Download failed:', error)
         alert('Failed to download package.')
