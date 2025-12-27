@@ -3,7 +3,6 @@
     <nav class="navbar">
       <div class="container navbar-container">
         <RouterLink to="/" class="navbar-brand">
-          <i class="fas fa-notebook"></i>
           <span>R Notebook</span>
         </RouterLink>
 
@@ -63,10 +62,8 @@ const handleLogout = () => {
   display: flex;
   flex-direction: column;
   background-color: #f9fafb;
-  /* Light gray background for whole app */
 }
 
-/* --- Navbar --- */
 .navbar {
   background: white;
   border-bottom: 1px solid #e5e7eb;
@@ -76,10 +73,9 @@ const handleLogout = () => {
   z-index: 100;
 }
 
+
 .container {
-  max-width: 1200px;
   margin: 0 auto;
-  padding: 0 1rem;
 }
 
 .navbar-container {
@@ -87,7 +83,6 @@ const handleLogout = () => {
   justify-content: space-between;
   align-items: center;
   height: 64px;
-  /* Fixed height for consistency */
 }
 
 .navbar-brand {
@@ -97,7 +92,6 @@ const handleLogout = () => {
   font-size: 1.25rem;
   font-weight: 700;
   color: #4f46e5;
-  /* Indigo-600 */
   text-decoration: none;
 }
 
@@ -107,10 +101,8 @@ const handleLogout = () => {
   gap: 1.5rem;
 }
 
-/* --- Links --- */
 .nav-link {
   color: #4b5563;
-  /* Gray-600 */
   text-decoration: none;
   font-weight: 500;
   font-size: 0.95rem;
@@ -123,7 +115,6 @@ const handleLogout = () => {
   font-weight: 600;
 }
 
-/* --- User Section --- */
 .nav-user {
   display: flex;
   align-items: center;
@@ -153,10 +144,8 @@ const handleLogout = () => {
 
 .btn-logout:hover {
   color: #dc2626;
-  /* Red on hover */
 }
 
-/* --- Guest Section --- */
 .nav-guest {
   display: flex;
   align-items: center;
@@ -182,7 +171,6 @@ main {
   flex: 1;
 }
 
-/* Mobile */
 @media (max-width: 768px) {
   .navbar-container {
     flex-direction: column;

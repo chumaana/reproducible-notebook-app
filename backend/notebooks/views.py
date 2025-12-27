@@ -11,7 +11,6 @@ from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.contrib.auth import authenticate
 
-
 from .models import Notebook, Execution, ReproducibilityAnalysis
 from .serializers import (
     NotebookSerializer,
@@ -124,7 +123,7 @@ class NotebookViewSet(viewsets.ModelViewSet):
         detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated]
     )
     def execute(self, request, pk=None):
-        """Execute notebook with r4r"""
+        """Step 1: Simple execution - just HTML output"""
         notebook = self.get_object()
 
         print(
@@ -135,7 +134,7 @@ class NotebookViewSet(viewsets.ModelViewSet):
 
         try:
             executor = RExecutor()
-            result = executor.execute_rmd(notebook.content, str(notebook.id))
+            result = executor.execute_rmd_simple(notebook.content, str(notebook.id))
 
             if result.get("success"):
                 execution.html_output = result.get("html", "")
@@ -146,23 +145,11 @@ class NotebookViewSet(viewsets.ModelViewSet):
                 ReproducibilityAnalysis.objects.update_or_create(
                     notebook=notebook,
                     defaults={
-                        "r4r_score": 100,
                         "dependencies": result.get("static_analysis", {}).get(
                             "issues", []
                         ),
-                        "system_deps": result.get("manifest", {}).get(
-                            "system_packages", []
-                        ),
-                        "dockerfile": result.get("dockerfile", ""),
-                        "makefile": result.get("makefile", ""),
                     },
                 )
-
-                zip_path = executor.create_reproducibility_zip(notebook.id)
-                if zip_path:
-                    print(f"Reproducibility package created: {zip_path}")
-                else:
-                    print("Warning: Failed to create package ZIP")
 
                 return Response(result)
             else:
@@ -190,6 +177,64 @@ class NotebookViewSet(viewsets.ModelViewSet):
             )
 
     @action(
+        detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated]
+    )
+    def generate_package(self, request, pk=None):
+        """Step 2: Generate reproducibility package with r4r"""
+        notebook = self.get_object()
+
+        try:
+            executor = RExecutor()
+            result = executor.generate_reproducibility_package(notebook.id)
+
+            if result.get("success"):
+                ReproducibilityAnalysis.objects.update_or_create(
+                    notebook=notebook,
+                    defaults={
+                        "r4r_score": 100 if result.get("build_success") else 50,
+                        "dockerfile": result.get("dockerfile", ""),
+                        "makefile": result.get("makefile", ""),
+                        "system_deps": result.get("manifest", {}).get(
+                            "system_packages", []
+                        ),
+                    },
+                )
+
+                zip_path = executor.create_reproducibility_zip(notebook.id)
+                if zip_path:
+                    print(f"Package created: {zip_path}")
+                else:
+                    print("Warning: Failed to create package ZIP")
+
+            return Response(result)
+
+        except Exception as e:
+            traceback.print_exc()
+            return Response(
+                {"success": False, "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(
+        detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated]
+    )
+    def generate_diff(self, request, pk=None):
+        """Step 3: Generate semantic diff with r-diff"""
+        notebook = self.get_object()
+
+        try:
+            executor = RExecutor()
+            result = executor.generate_semantic_diff(notebook.id)
+            return Response(result)
+
+        except Exception as e:
+            traceback.print_exc()
+            return Response(
+                {"success": False, "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(
         detail=True, methods=["get"], permission_classes=[permissions.IsAuthenticated]
     )
     def download(self, request, pk=None):
@@ -211,7 +256,9 @@ class NotebookViewSet(viewsets.ModelViewSet):
 
             if not os.path.exists(zip_path):
                 return Response(
-                    {"error": "Package not generated yet. Run execution first."},
+                    {
+                        "error": "Package not generated yet. Run 'Generate Package' first."
+                    },
                     status=404,
                 )
 

@@ -7,20 +7,35 @@
                 <button @click="saveNotebook" class="btn btn-primary">
                     <i class="fas fa-save"></i> Save
                 </button>
+
                 <button @click="executeNotebook" class="btn btn-success" :disabled="executing">
                     <i class="fas fa-play"></i> {{ executing ? 'Running...' : 'Run' }}
                 </button>
-                <button @click="toggleAnalysis" class="btn btn-secondary" :disabled="!notebook.id">
+
+                <button @click="generatePackage" class="btn btn-primary" :disabled="packageGenerating || !hasExecuted"
+                    :title="!hasExecuted ? 'Run notebook first' : 'Generate reproducibility package'">
+                    <i class="fas" :class="packageGenerating ? 'fa-spinner fa-spin' : 'fa-box'"></i>
+                    {{ packageGenerating ? 'Building...' : 'Package' }}
+                </button>
+
+                <button @click="generateDiff" class="btn btn-secondary" :disabled="diffGenerating || !hasPackage"
+                    :title="!hasPackage ? 'Generate package first' : 'Compare local vs container'">
+                    <i class="fas" :class="diffGenerating ? 'fa-spinner fa-spin' : 'fa-code-compare'"></i>
+                    {{ diffGenerating ? 'Comparing...' : 'Diff' }}
+                </button>
+
+                <button @click="toggleAnalysis" class="btn btn-outline" :disabled="!notebook.id">
                     <i class="fas fa-chart-bar"></i> Analysis
                 </button>
+
                 <button @click="downloadRmd" class="btn btn-outline">
                     <i class="fas fa-download"></i> .Rmd
                 </button>
 
-                <button @click="downloadPackage" class="btn btn-outline" :disabled="!isPackageReady || packageLoading"
-                    :title="!isPackageReady ? 'Run the notebook first to generate package' : 'Download ZIP'">
-                    <i class="fas" :class="packageLoading ? 'fa-spinner fa-spin' : 'fa-box'"></i>
-                    {{ packageLoading ? 'Preparing...' : 'Package' }}
+                <button @click="downloadPackage" class="btn btn-outline" :disabled="!hasPackage || packageLoading"
+                    :title="!hasPackage ? 'Generate package first' : 'Download ZIP'">
+                    <i class="fas" :class="packageLoading ? 'fa-spinner fa-spin' : 'fa-download'"></i>
+                    {{ packageLoading ? 'Downloading...' : 'Download' }}
                 </button>
             </div>
         </div>
@@ -48,8 +63,9 @@
                 <div class="pane-header">
                     <h3><i class="fas fa-file-alt"></i> Output</h3>
                     <div class="output-status">
-                        <span v-if="executing" class="status-running">
-                            <i class="fas fa-spinner fa-spin"></i> Running...
+                        <span v-if="executing || packageGenerating || diffGenerating" class="status-running">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            {{ executing ? 'Running...' : packageGenerating ? 'Building...' : 'Comparing...' }}
                         </span>
                         <span v-else-if="executionError" class="status-error">
                             <i class="fas fa-times-circle"></i> Failed
@@ -161,17 +177,43 @@
                     </div>
 
                     <div class="modal-actions">
-                        <button @click="downloadPackageFromModal" class="btn btn-sm btn-primary"
-                            :disabled="!isPackageReady || packageLoading">
-                            <i class="fas" :class="packageLoading ? 'fa-spinner fa-spin' : 'fa-download'"></i>
-                            {{ packageLoading ? 'Preparing...' : 'Download Reproducibility Package' }}
+                        <button v-if="diffResult" @click="showDiffModal = true" class="btn btn-sm btn-secondary">
+                            <i class="fas fa-code-compare"></i>
+                            View Semantic Diff
                         </button>
+
+                        <button @click="downloadPackageFromModal" class="btn btn-sm btn-primary"
+                            :disabled="!hasPackage || packageLoading">
+                            <i class="fas" :class="packageLoading ? 'fa-spinner fa-spin' : 'fa-download'"></i>
+                            {{ packageLoading ? 'Downloading...' : 'Download Reproducibility Package' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </Transition>
+
+        <Transition name="fade">
+            <div v-if="showDiffModal" class="modal-overlay" @click="showDiffModal = false">
+                <div class="diff-modal" @click.stop>
+                    <div class="diff-modal-header">
+                        <h3><i class="fas fa-code-compare"></i> Semantic Diff (Local vs Container)</h3>
+                        <button @click="showDiffModal = false" class="modal-close-btn">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="diff-modal-body">
+                        <iframe v-if="diffResult" :srcdoc="diffResult" class="diff-iframe"></iframe>
+                        <div v-else class="diff-empty">
+                            <i clasContainers="fas fa-spinner fa-spin"></i>
+                            <p>Loading diff...</p>
+                        </div>
                     </div>
                 </div>
             </div>
         </Transition>
     </div>
 </template>
+
 
 <script setup lang="ts">
 import { ref, onMounted, watch, computed, nextTick } from 'vue'
@@ -193,17 +235,21 @@ const warnings = ref<any[]>([])
 const executing = ref(false)
 const executionResult = ref<string | null>(null)
 const executionError = ref<string | null>(null)
-const errorPre = ref<HTMLElement | null>(null)
 
 const analysis = ref<any>(null)
 const staticAnalysis = ref<any>(null)
 const showAnalysis = ref(false)
-const editorTextarea = ref<HTMLTextAreaElement | null>(null)
 const packageLoading = ref(false)
 
 let resizeStartX = 0
 let resizeStartWidth = 0
 let isResizing = false
+const hasExecuted = ref(false)
+const hasPackage = ref(false)
+const packageGenerating = ref(false)
+const diffGenerating = ref(false)
+const diffResult = ref<string>('')
+const showDiffModal = ref(false)
 
 const parsedError = computed(() => {
     if (!executionError.value) return null;
@@ -346,6 +392,7 @@ const executeNotebook = async () => {
     executing.value = true
     executionResult.value = null
     executionError.value = null
+    diffResult.value = ''
     warnings.value = []
 
     try {
@@ -358,22 +405,16 @@ const executeNotebook = async () => {
 
         if (result.success === false) {
             executionError.value = result.error || 'Execution failed'
+            hasExecuted.value = false
             return
         }
 
         executionResult.value = result.html
-
-        analysis.value = {
-            ...analysis.value,
-            manifest: result.manifest,
-            detected_packages: result.detected_packages,
-            dockerfile: result.dockerfile,
-        }
-
-        await loadAnalysis()
+        hasExecuted.value = true
 
     } catch (error: any) {
         console.error('Execution failed:', error)
+        hasExecuted.value = false
 
         if (error.response && error.response.data) {
             executionError.value = error.response.data.error || JSON.stringify(error.response.data)
@@ -388,10 +429,63 @@ const executeNotebook = async () => {
     } finally {
         executing.value = false
     }
+}
+const generatePackage = async () => {
+    if (!notebook.value.id) return
 
+    packageGenerating.value = true
+    executionError.value = null
 
+    try {
+        const result = await api.generatePackage(notebook.value.id)
+
+        if (result.success) {
+            hasPackage.value = true
+            analysis.value = {
+                ...analysis.value,
+                dockerfile: result.dockerfile,
+                makefile: result.makefile,
+                manifest: result.manifest,
+            }
+            alert('Reproducibility package generated successfully!')
+        } else {
+            executionError.value = result.error
+            alert(`Failed to generate package: ${result.error}`)
+        }
+    } catch (error: any) {
+        console.error('Package generation failed:', error)
+        executionError.value = error.response?.data?.error || error.message
+        alert('Failed to generate package. Check console for details.')
+    } finally {
+        packageGenerating.value = false
+    }
 }
 
+
+const generateDiff = async () => {
+    if (!notebook.value.id) return
+
+    diffGenerating.value = true
+    executionError.value = null
+
+    try {
+        const result = await api.generateDiff(notebook.value.id)
+
+        if (result.success) {
+            diffResult.value = result.diff_html
+            showAnalysis.value = true
+        } else {
+            executionError.value = result.error
+            alert(`Failed to generate diff: ${result.error}`)
+        }
+    } catch (error: any) {
+        console.error('Diff generation failed:', error)
+        executionError.value = error.response?.data?.error || error.message
+        alert('Failed to generate diff. Check console for details.')
+    } finally {
+        diffGenerating.value = false
+    }
+}
 
 const loadAnalysis = async () => {
     if (!notebook.value.id) return
@@ -421,7 +515,8 @@ const downloadRmd = () => {
     downloadFile(fullContent, `${notebookTitle.value}.Rmd`, 'text/plain')
 }
 const downloadPackage = async () => {
-    if (!notebook.value.id || packageLoading.value || !isPackageReady.value) return
+    if (!notebook.value.id || packageLoading.value || !hasPackage.value) return
+
 
     packageLoading.value = true
 
@@ -495,7 +590,6 @@ onMounted(() => {
     loadNotebook()
 })
 </script>
-
 <style scoped>
 .notebook-editor {
     display: flex;
@@ -508,7 +602,7 @@ onMounted(() => {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 1rem 2rem;
+    padding: 1rem 1.5rem;
     background: white;
     border-bottom: 1px solid #e5e7eb;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
@@ -669,7 +763,6 @@ onMounted(() => {
     border-bottom: 2px solid #fecaca;
 }
 
-/* 🔥 Highlighted Error Box */
 .highlighted-error {
     background: #fee2e2;
     border-left: 5px solid #dc2626;
@@ -694,7 +787,6 @@ onMounted(() => {
     font-weight: 600;
 }
 
-/* Details/Summary styles */
 .full-log-details summary {
     cursor: pointer;
     color: #6b7280;
@@ -747,7 +839,6 @@ onMounted(() => {
     font-size: 1rem;
 }
 
-/* Analysis Modal */
 .analysis-modal-bottom {
     position: fixed;
     bottom: 20px;
@@ -1014,6 +1105,75 @@ onMounted(() => {
     justify-content: center;
 }
 
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+}
+
+.diff-modal {
+    background: white;
+    width: 90vw;
+    height: 90vh;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.diff-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    background: #8b5cf6;
+    color: white;
+}
+
+.diff-modal-header h3 {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.diff-modal-body {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+}
+
+.diff-iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: white;
+}
+
+.diff-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #6b7280;
+}
+
+.diff-empty i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
 .slide-up-enter-active,
 .slide-up-leave-active {
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -1027,5 +1187,15 @@ onMounted(() => {
 .slide-up-leave-to {
     opacity: 0;
     transform: translateY(20px);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+    transition: opacity 0.3s;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+    opacity: 0;
 }
 </style>

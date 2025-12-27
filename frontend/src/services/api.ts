@@ -12,14 +12,14 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token')
-    console.log('🔑 Token exists:', !!token) // Debug
-    console.log('🔑 Token value:', token) // Debug
+    console.log('🔑 Token exists:', !!token)
+    console.log('🔑 Token value:', token)
     if (token) {
       config.headers.Authorization = `Token ${token}`
       console.log(
         '✅ Authorization header:',
         config.headers.Authorization?.substring(0, 30) + '...',
-      ) // Debug
+      )
     } else {
       console.log('❌ No token found!')
     }
@@ -49,6 +49,7 @@ export interface Execution {
   completed_at?: string
   error_message?: string
 }
+
 export interface ReproducibilityAnalysis {
   detected_packages?: string[]
   manifest?: any
@@ -77,6 +78,7 @@ export default {
     const response = await api.post('/auth/login/', credentials)
     return response.data
   },
+
   async register(credentials: RegisterPayload) {
     const response = await api.post('/auth/register/', credentials)
     return response.data
@@ -89,6 +91,16 @@ export default {
 
   async getUser() {
     const response = await api.get('/auth/user/')
+    return response.data
+  },
+
+  async getUserProfile() {
+    const response = await api.get('/profile/')
+    return response.data
+  },
+
+  async updateUserProfile(data: any) {
+    const response = await api.patch('/profile/', data)
     return response.data
   },
 
@@ -121,6 +133,16 @@ export default {
     return response.data
   },
 
+  async generatePackage(id: number): Promise<any> {
+    const response = await api.post(`/notebooks/${id}/generate_package/`)
+    return response.data
+  },
+
+  async generateDiff(id: number): Promise<any> {
+    const response = await api.post(`/notebooks/${id}/generate_diff/`)
+    return response.data
+  },
+
   async getExecutions(notebookId: number): Promise<Execution[]> {
     const response = await api.get(`/notebooks/${notebookId}/executions/`)
     return response.data
@@ -142,15 +164,6 @@ export default {
     const response = await api.get(`/notebooks/${id}/download_package/`, {
       responseType: 'blob',
     })
-    return response.data
-  },
-  async getUserProfile() {
-    const response = await api.get('/profile/')
-    return response.data
-  },
-
-  async updateUserProfile(data: any) {
-    const response = await api.patch('/profile/', data)
     return response.data
   },
 }

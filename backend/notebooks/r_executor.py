@@ -7,8 +7,6 @@ import json
 import time
 import datetime
 import zipfile
-import hashlib
-import traceback
 
 from .static_analyzer import ReproducibilityAnalyzer
 
@@ -16,96 +14,30 @@ from .static_analyzer import ReproducibilityAnalyzer
 class RExecutor:
     def __init__(self):
         self.analyzer = ReproducibilityAnalyzer()
+        self.rdiff_binary = "/usr/local/bin/r-diff"
 
-    def execute_rmd(self, content, notebook_id):
+    def execute_rmd_simple(self, content, notebook_id):
         start_time = time.time()
-        self._log_header(f"EXECUTING NOTEBOOK {notebook_id}")
+        self._log_header(f"SIMPLE EXECUTION - NOTEBOOK {notebook_id}")
 
-        final_repro_dir = f"storage/notebooks/{notebook_id}/reproducibility"
-        content_hash = self._compute_content_hash(content)
-        hash_file = os.path.join(final_repro_dir, ".content_hash")
+        final_dir = f"storage/notebooks/{notebook_id}/reproducibility"
+        os.makedirs(final_dir, exist_ok=True)
 
         try:
             static_analysis = self.analyzer.analyze(content or "")
         except Exception:
             static_analysis = {"issues": [], "total_issues": 0}
 
-        if os.path.exists(final_repro_dir) and os.path.exists(hash_file):
-            try:
-                stored_hash = open(hash_file, "r").read().strip()
-                if stored_hash == content_hash:
-                    self._log("Content unchanged. Using CACHED result.", level="INFO")
-
-                    html_content = self.read_file(final_repro_dir, "notebook.html")
-                    if html_content:
-                        return {
-                            "success": True,
-                            "build_success": True,
-                            "html": html_content,
-                            "dockerfile": self.read_file(final_repro_dir, "Dockerfile"),
-                            "makefile": self.read_file(final_repro_dir, "Makefile"),
-                            "manifest": self.read_json(
-                                final_repro_dir, "manifest.json"
-                            ),
-                            "logs": "Cached result (content unchanged)",
-                            "detected_packages": self.detect_packages_from_content(
-                                content
-                            ),
-                            "static_analysis": static_analysis,
-                            "cached": True,
-                        }
-            except Exception:
-                self._log("Cache read failed. Re-running.", level="WARN")
-
-        self._log_section("1. PREPARATION")
-
-        self._log(
-            f"Static Analysis: {static_analysis.get('total_issues', 0)} issues found"
-        )
-
         with tempfile.TemporaryDirectory(dir="/tmp") as temp_dir:
-            self._log(f"Working Directory: {temp_dir}")
-
             rmd_path = os.path.join(temp_dir, "notebook.Rmd")
-            try:
-                with open(rmd_path, "w", encoding="utf-8") as f:
-                    f.write(content)
-            except Exception as e:
-                return self._error_response("Failed to save Rmd file", e)
+            with open(rmd_path, "w", encoding="utf-8") as f:
+                f.write(content)
 
             packages = self.detect_packages_from_content(content)
             if packages:
-                self._log(f"Checking {len(packages)} R packages...")
+                self._install_packages(packages, temp_dir)
 
-                repo_url = "https://packagemanager.posit.co/cran/__linux__/noble/latest"
-
-                install_script = f"""
-                pkgs <- c('{ "', '".join(packages) }')
-                repo <- '{repo_url}'
-                for (pkg in pkgs) {{
-                    if (!require(pkg, character.only = TRUE, quietly = TRUE)) {{
-                        message(paste("Installing missing package:", pkg))
-                        install.packages(pkg, repos = repo)
-                    }} else {{
-                        message(paste("Package already installed:", pkg))
-                    }}
-                }}
-                """
-
-                install_res = self._run_command(
-                    ["R", "-e", install_script],
-                    cwd=temp_dir,
-                    desc="Check & Install Packages",
-                )
-
-                if install_res.returncode != 0:
-                    self._log(
-                        "Package installation warning (proceeding anyway)",
-                        level="WARN",
-                    )
-
-            self._log_section("3. HTML RENDERING")
-
+            self._log_section("RENDERING HTML")
             html_path = os.path.join(temp_dir, "notebook.html")
             render_res = self._run_command(
                 cmd=[
@@ -126,7 +58,35 @@ class RExecutor:
 
             html_content = self.read_file(temp_dir, "notebook.html")
 
-            self._log_section("4. R4R FULL EXECUTION")
+            with open(os.path.join(final_dir, "notebook_local.html"), "w") as f:
+                f.write(html_content)
+            shutil.copy(rmd_path, os.path.join(final_dir, "notebook.Rmd"))
+
+            duration = time.time() - start_time
+            self._log_header(f"SIMPLE EXECUTION DONE ({duration:.2f}s)")
+
+            return {
+                "success": True,
+                "html": html_content,
+                "detected_packages": packages,
+                "static_analysis": static_analysis,
+                "logs": render_res.stdout,
+            }
+
+    def generate_reproducibility_package(self, notebook_id):
+        start_time = time.time()
+        self._log_header(f"GENERATING REPRODUCIBILITY PACKAGE - NOTEBOOK {notebook_id}")
+
+        final_dir = f"storage/notebooks/{notebook_id}/reproducibility"
+
+        if not os.path.exists(os.path.join(final_dir, "notebook.Rmd")):
+            return {"success": False, "error": "Run notebook first to generate .Rmd"}
+
+        with tempfile.TemporaryDirectory(dir="/tmp") as temp_dir:
+            rmd_path = os.path.join(temp_dir, "notebook.Rmd")
+            shutil.copy(os.path.join(final_dir, "notebook.Rmd"), rmd_path)
+
+            self._log_section("R4R TRACE & BUILD")
             r4r_output_dir = os.path.join(temp_dir, "r4r_output")
 
             r4r_binary = "/usr/local/bin/r4r"
@@ -136,6 +96,8 @@ class RExecutor:
             env = os.environ.copy()
             env["HOME"] = "/home/r4r"
             env["VISUAL"] = "/bin/true"
+
+            html_path = os.path.join(temp_dir, "result.html")
 
             r4r_cmd = [
                 r4r_binary,
@@ -157,48 +119,120 @@ class RExecutor:
                 desc="r4r Trace & Build",
             )
 
-            self._log_section("5. SAVING RESULTS")
-            os.makedirs(final_repro_dir, exist_ok=True)
+            if r4r_res.returncode != 0:
+                return {
+                    "success": False,
+                    "error": f"r4r failed:\n{r4r_res.stderr}",
+                    "logs": r4r_res.stdout + r4r_res.stderr,
+                }
 
-            try:
-                if os.path.exists(r4r_output_dir):
-                    shutil.copytree(r4r_output_dir, final_repro_dir, dirs_exist_ok=True)
+            if os.path.exists(r4r_output_dir):
+                shutil.copytree(r4r_output_dir, final_dir, dirs_exist_ok=True)
 
-                with open(os.path.join(final_repro_dir, "notebook.html"), "w") as f:
-                    f.write(html_content)
-                shutil.copy(rmd_path, os.path.join(final_repro_dir, "notebook.Rmd"))
+            container_html = self._find_html_result(r4r_output_dir)
+            if container_html:
+                shutil.copy(
+                    container_html, os.path.join(final_dir, "notebook_container.html")
+                )
 
-                with open(hash_file, "w") as f:
-                    f.write(content_hash)
-
-                self._log(f"Files saved to: {final_repro_dir}")
-
-            except Exception as e:
-                return self._error_response("Failed to copy result files", e)
+            zip_path = self.create_reproducibility_zip(notebook_id)
 
             duration = time.time() - start_time
-            self._log_header(f"DONE (Took {duration:.2f}s)")
+            self._log_header(f"PACKAGE GENERATION DONE ({duration:.2f}s)")
 
             return {
                 "success": True,
                 "build_success": r4r_res.returncode == 0,
-                "html": html_content,
-                "dockerfile": self.read_file(final_repro_dir, "Dockerfile"),
-                "makefile": self.read_file(final_repro_dir, "Makefile"),
-                "manifest": self.read_json(final_repro_dir, "manifest.json"),
-                "logs": r4r_res.stdout + (r4r_res.stderr or ""),
-                "detected_packages": packages,
-                "static_analysis": static_analysis,
-                "cached": False,
+                "dockerfile": self.read_file(final_dir, "Dockerfile"),
+                "makefile": self.read_file(final_dir, "Makefile"),
+                "manifest": self.read_json(final_dir, "manifest.json"),
+                "logs": r4r_res.stdout,
+                "package_ready": zip_path is not None,
             }
 
-    def _compute_content_hash(self, content):
-        if not content:
-            return ""
-        return hashlib.sha256(content.encode("utf-8")).hexdigest()
+    def generate_semantic_diff(self, notebook_id):
+        """Порівнює local vs container HTML за допомогою r-diff"""
+        start_time = time.time()
+        self._log_header(f"GENERATING SEMANTIC DIFF - NOTEBOOK {notebook_id}")
+
+        final_dir = f"storage/notebooks/{notebook_id}/reproducibility"
+
+        local_html = os.path.abspath(os.path.join(final_dir, "notebook_local.html"))
+        container_html = os.path.abspath(
+            os.path.join(final_dir, "notebook_container.html")
+        )
+
+        if not os.path.exists(local_html):
+            return {
+                "success": False,
+                "error": "Local HTML not found. Run notebook first.",
+            }
+
+        if not os.path.exists(container_html):
+            return {
+                "success": False,
+                "error": "Container HTML not found. Generate package first.",
+            }
+
+        if not os.path.exists(self.rdiff_binary):
+            return {"success": False, "error": "r-diff binary not found"}
+
+        with tempfile.TemporaryDirectory(dir="/tmp") as temp_dir:
+            diff_output = os.path.join(temp_dir, "semantic_diff.html")
+
+            diff_cmd = [
+                self.rdiff_binary,
+                "-html",
+                local_html,
+                container_html,
+                "-output",
+                diff_output,
+            ]
+
+            diff_res = self._run_command(diff_cmd, cwd=temp_dir, desc="Running r-diff")
+
+            self._log(f"r-diff exit code: {diff_res.returncode}")
+            self._log(f"r-diff stdout:\n{diff_res.stdout}")
+            self._log(f"r-diff stderr:\n{diff_res.stderr}")
+
+            if diff_res.returncode != 0 or not os.path.exists(diff_output):
+                return {
+                    "success": False,
+                    "error": f"r-diff failed:\n{diff_res.stderr}",
+                    "logs": diff_res.stdout + diff_res.stderr,
+                }
+
+            diff_html_content = self.read_file(temp_dir, "semantic_diff.html")
+
+            with open(os.path.join(final_dir, "semantic_diff.html"), "w") as f:
+                f.write(diff_html_content)
+
+            duration = time.time() - start_time
+            self._log_header(f"DIFF GENERATION DONE ({duration:.2f}s)")
+
+            return {
+                "success": True,
+                "diff_html": diff_html_content,
+                "logs": diff_res.stdout,
+            }
+
+    def _install_packages(self, packages, temp_dir):
+        self._log(f"Installing {len(packages)} R packages...")
+        repo_url = "https://packagemanager.posit.co/cran/__linux__/noble/latest"
+        install_script = f"""
+        pkgs <- c('{ "', '".join(packages) }')
+        repo <- '{repo_url}'
+        for (pkg in pkgs) {{
+            if (!require(pkg, character.only = TRUE, quietly = TRUE)) {{
+                install.packages(pkg, repos = repo)
+            }}
+        }}
+        """
+        self._run_command(
+            ["R", "-e", install_script], cwd=temp_dir, desc="Install Packages"
+        )
 
     def _run_command(self, cmd, cwd, desc="Command", env=None, timeout=300):
-        cmd_str = " ".join(cmd)
         self._log(f"[{desc}] Running...")
         try:
             result = subprocess.run(
@@ -220,6 +254,15 @@ class RExecutor:
             return subprocess.CompletedProcess(
                 args=cmd, returncode=1, stdout="", stderr=str(e)
             )
+
+    def _find_html_result(self, search_dir):
+        if not os.path.exists(search_dir):
+            return None
+        for root, dirs, files in os.walk(search_dir):
+            for file in files:
+                if file.endswith(".html"):
+                    return os.path.join(root, file)
+        return None
 
     def _log(self, msg, level="INFO"):
         print(
@@ -277,9 +320,7 @@ class RExecutor:
             with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
                 for root, dirs, files in os.walk(repro_dir):
                     for file in files:
-                        if file.endswith(".zip") or file.startswith(
-                            "."
-                        ):  # Skip zip itself and hidden files
+                        if file.endswith(".zip") or file.startswith("."):
                             continue
                         file_path = os.path.join(root, file)
                         arcname = os.path.relpath(file_path, repro_dir)
