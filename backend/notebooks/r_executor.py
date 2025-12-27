@@ -216,21 +216,39 @@ class RExecutor:
                 "logs": diff_res.stdout,
             }
 
+        packages = self.detect_packages_from_content(content)
+
     def _install_packages(self, packages, temp_dir):
-        self._log(f"Installing {len(packages)} R packages...")
-        repo_url = "https://packagemanager.posit.co/cran/__linux__/noble/latest"
-        install_script = f"""
-        pkgs <- c('{ "', '".join(packages) }')
-        repo <- '{repo_url}'
-        for (pkg in pkgs) {{
-            if (!require(pkg, character.only = TRUE, quietly = TRUE)) {{
-                install.packages(pkg, repos = repo)
-            }}
-        }}
-        """
-        self._run_command(
-            ["R", "-e", install_script], cwd=temp_dir, desc="Install Packages"
-        )
+
+        if packages:
+            self._log(f"Checking {len(packages)} R packages...")
+
+            repo_url = "https://packagemanager.posit.co/cran/__linux__/noble/latest"
+
+            install_script = f"""
+                pkgs <- c('{ "', '".join(packages) }')
+                repo <- '{repo_url}'
+                for (pkg in pkgs) {{
+                    if (!require(pkg, character.only = TRUE, quietly = TRUE)) {{
+                        message(paste("Installing missing package:", pkg))
+                        install.packages(pkg, repos = repo)
+                    }} else {{
+                        message(paste("Package already installed:", pkg))
+                    }}
+                }}
+                """
+
+            install_res = self._run_command(
+                ["R", "-e", install_script],
+                cwd=temp_dir,
+                desc="Check & Install Packages",
+            )
+
+            if install_res.returncode != 0:
+                self._log(
+                    "Package installation warning (proceeding anyway)",
+                    level="WARN",
+                )
 
     def _run_command(self, cmd, cwd, desc="Command", env=None, timeout=300):
         self._log(f"[{desc}] Running...")
