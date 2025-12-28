@@ -19,12 +19,12 @@ export interface Notebook {
   id?: number
   title: string
   content: string
-  author?: string // username (read-only from backend)
+  author?: string
   author_id?: number
   created_at?: string
   updated_at?: string
   is_public?: boolean
-  analysis?: AnalysisData // nested from backend
+  analysis?: AnalysisData
   execution_count?: number
   last_execution_status?: string
   has_analysis?: boolean
@@ -69,7 +69,7 @@ export interface AnalysisData {
   id?: number
   notebook?: number
   notebook_title?: string
-  dependencies?: StaticAnalysisIssue[] // This is your static analysis issues
+  dependencies?: StaticAnalysisIssue[]
   system_deps?: string[]
   dockerfile?: string
   makefile?: string

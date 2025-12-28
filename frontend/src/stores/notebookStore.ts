@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import api from '@/services/api'
 import { getErrorMessage } from '@/utils/helpers'
-import type { Notebook, AnalysisData, StaticAnalysisIssue } from '@/types/index'
+import type { Notebook, AnalysisData, StaticAnalysisIssue, R4RData } from '@/types/index'
 
 export const useNotebookStore = defineStore('notebook', () => {
   // ==================== STATE ====================
@@ -87,6 +87,9 @@ export const useNotebookStore = defineStore('notebook', () => {
         // If diff_html exists, set it
         if (analysis.value.diff_html) {
           diffResult.value = analysis.value.diff_html
+        }
+        if (analysis.value.r4r_data) {
+          r4rData.value = analysis.value.r4r_data
         }
       }
 
@@ -191,14 +194,7 @@ export const useNotebookStore = defineStore('notebook', () => {
 
     try {
       const res = await api.generatePackage(notebook.value.id)
-      console.log('🔥 FULL BACKEND RESPONSE:', res) // ← ADD THIS!
-      console.log('🔥 r4r_data EXISTS?', !!res.r4r_data) // ← ADD THIS!
-      console.log('🔥 r4r_data CONTENT:', res.r4r_data) // ← ADD THIS!
 
-      if (res.r4r_data) {
-        r4rData.value = res.r4r_data
-        console.log('✅ r4rData SET:', r4rData.value)
-      }
       if (res.success) {
         // Update local analysis state
         if (!analysis.value) {
@@ -297,6 +293,7 @@ export const useNotebookStore = defineStore('notebook', () => {
     analysis,
     staticAnalysis,
     diffResult,
+    r4rData,
 
     // Computed
     hasExecuted,
@@ -306,7 +303,6 @@ export const useNotebookStore = defineStore('notebook', () => {
     warnings,
     hasErrors,
     isLoading,
-    r4rData,
     // Actions
     load,
     save,

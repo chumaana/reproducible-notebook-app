@@ -104,23 +104,25 @@ class ReproducibilityAnalysis(models.Model):
         related_name="analysis",
         help_text="The notebook being analyzed",
     )
-
     dependencies = models.JSONField(
         default=list, help_text="List of static analysis issues"
     )
-
     system_deps = models.JSONField(
         default=list, help_text="List of system-level dependencies"
     )
-
     dockerfile = models.TextField(
         blank=True, default="", help_text="Generated Dockerfile content"
     )
     makefile = models.TextField(
         blank=True, default="", help_text="Generated Makefile content"
     )
-
     diff_html = models.TextField(blank=True, null=True)
+
+    r4r_data = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="r4r build metrics: r_packages, system_libs, files_accessed",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

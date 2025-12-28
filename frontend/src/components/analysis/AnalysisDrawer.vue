@@ -117,7 +117,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import CodeHighlighter from '@/components/common/CodeHighlighter.vue'
-import type { StaticAnalysisIssue } from '@/types/types'
+import type { StaticAnalysisIssue } from '@/types/index'
 
 // --- Interfaces ---
 interface R4RData {

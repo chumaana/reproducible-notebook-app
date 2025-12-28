@@ -173,6 +173,7 @@ class NotebookViewSet(viewsets.ModelViewSet):
             result = executor.execute(notebook.id)
 
             if result.get("success"):
+                # Save r4r_data along with other fields
                 ReproducibilityAnalysis.objects.update_or_create(
                     notebook=notebook,
                     defaults={
@@ -181,6 +182,7 @@ class NotebookViewSet(viewsets.ModelViewSet):
                         "system_deps": result.get("manifest", {}).get(
                             "system_packages", []
                         ),
+                        "r4r_data": result.get("r4r_data", {}),  # NEW: Save r4r metrics
                     },
                 )
 

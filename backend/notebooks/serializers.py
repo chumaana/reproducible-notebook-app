@@ -84,6 +84,7 @@ class ReproducibilityAnalysisSerializer(serializers.ModelSerializer):
             "diff_html",
             "created_at",
             "updated_at",
+            "r4r_data",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
