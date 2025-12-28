@@ -15,7 +15,7 @@
             {{ isGenerating ? 'Building...' : 'Generate Package' }}
         </button>
 
-        <button v-if="hasPackage && canDownload" @click="$emit('generate')" class="btn btn-outline">
+        <button v-if="hasPackage && canDownload" @click="$emit('generate')" class="btn btn-primary">
             <i class="fas fa-sync-alt" :class="{ 'fa-spin': isGenerating }"></i>
         </button>
 

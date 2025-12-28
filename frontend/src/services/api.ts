@@ -6,7 +6,7 @@ import type {
   DiffResponse,
   AnalysisData,
   Execution,
-} from '@/types/types'
+} from '@/types'
 
 const api = axios.create({
   baseURL: 'http://localhost:8000/api',

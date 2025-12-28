@@ -30,7 +30,6 @@ export const useAuthStore = defineStore('auth', {
         this.token = response.token
         this.user = response.user
 
-        // 1. Persist to storage
         localStorage.setItem('token', response.token)
         localStorage.setItem('user', JSON.stringify(response.user))
 
@@ -51,7 +50,6 @@ export const useAuthStore = defineStore('auth', {
       try {
         const response = await api.register(credentials)
 
-        // If your backend returns token on registration
         if (response.token) {
           this.token = response.token
           this.user = response.user
