@@ -38,7 +38,7 @@
 
         <Transition name="slide-up">
             <AnalysisDrawer v-if="showAnalysis && (analysis || staticAnalysis)" :issues="adjustedIssues"
-                :code="cleanContent" :diff-result="diffResult" :package-loading="packageLoading"
+                :code="cleanContent" :diff-result="diffResult" :package-loading="packageLoading" :r4r-data="r4rData"
                 :has-static-analysis="!!staticAnalysis" @close="showAnalysis = false" @openDiff="showDiffModal = true"
                 @download="store.downloadPackage" />
         </Transition>
@@ -71,7 +71,7 @@ const {
     notebook, executing, executionResult, executionError,
     packageGenerating, diffGenerating, packageLoading,
     hasExecuted, hasPackage, canGenerateDiff, canDownloadPackage,
-    warnings, analysis, diffResult, staticAnalysis, downloadPackage
+    warnings, analysis, diffResult, staticAnalysis, r4rData
 } = storeToRefs(store)
 
 const notebookTitle = ref('Untitled Notebook')
@@ -83,9 +83,7 @@ const placeholderText = `# Write your R code here...`
 
 const { extractCleanContent, generateFullRmd } = useMarkdown(notebookTitle, cleanContent)
 
-watch(diffResult, (newVal) => {
-    console.log("PARENT (View) received diffResult:", newVal)
-})
+
 
 
 onMounted(async () => {

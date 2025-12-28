@@ -23,6 +23,7 @@ export const useNotebookStore = defineStore('notebook', () => {
   const diffResult = ref<string | null>(null)
   const staticAnalysis = ref<{ issues: StaticAnalysisIssue[] } | null>(null)
   const saveError = ref<string | null>(null)
+  const r4rData = ref<R4RData | null>(null)
 
   // ==================== COMPUTED ====================
   const hasExecuted = computed(() => !!executionResult.value)
@@ -58,6 +59,7 @@ export const useNotebookStore = defineStore('notebook', () => {
     packageGenerating.value = false
     diffGenerating.value = false
     packageLoading.value = false
+    r4rData.value = null
   }
 
   /**
@@ -189,11 +191,21 @@ export const useNotebookStore = defineStore('notebook', () => {
 
     try {
       const res = await api.generatePackage(notebook.value.id)
+      console.log('🔥 FULL BACKEND RESPONSE:', res) // ← ADD THIS!
+      console.log('🔥 r4r_data EXISTS?', !!res.r4r_data) // ← ADD THIS!
+      console.log('🔥 r4r_data CONTENT:', res.r4r_data) // ← ADD THIS!
 
+      if (res.r4r_data) {
+        r4rData.value = res.r4r_data
+        console.log('✅ r4rData SET:', r4rData.value)
+      }
       if (res.success) {
         // Update local analysis state
         if (!analysis.value) {
           analysis.value = {}
+        }
+        if (res.r4r_data) {
+          r4rData.value = res.r4r_data
         }
 
         analysis.value.dockerfile = res.dockerfile
@@ -294,7 +306,7 @@ export const useNotebookStore = defineStore('notebook', () => {
     warnings,
     hasErrors,
     isLoading,
-
+    r4rData,
     // Actions
     load,
     save,

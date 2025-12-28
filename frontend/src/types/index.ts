@@ -51,6 +51,7 @@ export interface ExecutionResponse {
     issues: StaticAnalysisIssue[]
     total_issues?: number
   }
+  r4r_data?: R4RData
 }
 
 // ==================== STATIC ANALYSIS ====================
@@ -60,7 +61,7 @@ export interface StaticAnalysisIssue {
   severity: 'high' | 'medium' | 'low'
   details: string
   fix: string
-  lines: { line_number: number; content: string }[]
+  lines: { line_number: number; code: string }[]
 }
 
 // ==================== REPRODUCIBILITY ANALYSIS ====================
@@ -75,6 +76,17 @@ export interface AnalysisData {
   diff_html?: string | null
   created_at?: string
   updated_at?: string
+  r4r_data?: R4RData
+}
+
+// ==================== R4R REPRODUCIBILITY ====================
+export interface R4RData {
+  r_packages: string[]
+  system_libs: string[]
+  files_accessed: number
+  image_size_mb?: number
+  reproducibility_score?: number
+  cache_hit?: boolean
 }
 
 // ==================== PACKAGE & DIFF ====================
@@ -86,6 +98,10 @@ export interface PackageResponse {
     system_packages: string[]
   }
   error?: string
+  r4r_data?: R4RData
+  build_success?: boolean
+  duration_seconds?: number
+  package_ready?: boolean
 }
 
 export interface DiffResponse {
