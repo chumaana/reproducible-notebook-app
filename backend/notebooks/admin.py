@@ -19,6 +19,6 @@ class ExecutionAdmin(admin.ModelAdmin):
 
 @admin.register(ReproducibilityAnalysis)
 class ReproducibilityAnalysisAdmin(admin.ModelAdmin):
-    list_display = ["notebook", "r4r_score", "created_at"]
+    list_display = ["notebook", "created_at"]
     list_filter = ["created_at"]
     readonly_fields = ["created_at", "updated_at"]

@@ -58,8 +58,14 @@ class StorageManager:
             with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
                 for root, dirs, files in os.walk(repro_dir):
                     for file in files:
-                        if file.endswith(".zip") or file.startswith("."):
+
+                        if (
+                            file.endswith(".zip")
+                            or file.startswith(".")
+                            or file == "semantic_diff.html"
+                        ):
                             continue
+
                         file_path = os.path.join(root, file)
                         arcname = os.path.relpath(file_path, repro_dir)
                         zipf.write(file_path, arcname)

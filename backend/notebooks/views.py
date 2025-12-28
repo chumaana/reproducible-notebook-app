@@ -18,6 +18,8 @@ from .serializers import (
     ExecutionSerializer,
     ReproducibilityAnalysisSerializer,
 )
+
+# Ensure you have all 3 executors imported
 from .executors import RmdExecutor, R4RExecutor, RDiffExecutor
 
 
@@ -78,10 +80,6 @@ class UserViewSet(viewsets.ModelViewSet):
     serializer_class = UserSerializer
 
     def get_permissions(self):
-        """
-        Allow anyone to register.
-        Require authentication for everything else.
-        """
         if self.action == "register":
             return [permissions.AllowAny()]
         return [permissions.IsAuthenticated()]
@@ -119,16 +117,11 @@ class NotebookViewSet(viewsets.ModelViewSet):
         """Auto-assign the author on create"""
         serializer.save(author=self.request.user)
 
-    @action(
-        detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated]
-    )
+    @action(detail=True, methods=["post"])
     def execute(self, request, pk=None):
-        """Step 1: Simple execution - just HTML output"""
+        """Step 1: Execute R code (RmdExecutor)"""
         notebook = self.get_object()
-
-        print(
-            f"DEBUG: Executing notebook {notebook.id} for user {request.user.username}"
-        )
+        print(f"DEBUG: Executing notebook {notebook.id}")
 
         execution = Execution.objects.create(notebook=notebook, status="running")
 
@@ -142,6 +135,7 @@ class NotebookViewSet(viewsets.ModelViewSet):
                 execution.completed_at = timezone.now()
                 execution.save()
 
+                # Save Static Analysis Issues to 'dependencies' field
                 ReproducibilityAnalysis.objects.update_or_create(
                     notebook=notebook,
                     defaults={
@@ -150,14 +144,12 @@ class NotebookViewSet(viewsets.ModelViewSet):
                         ),
                     },
                 )
-
                 return Response(result)
             else:
                 execution.status = "failed"
                 execution.error_message = result.get("error", "Unknown error")
                 execution.completed_at = timezone.now()
                 execution.save()
-
                 return Response(result, status=status.HTTP_400_BAD_REQUEST)
 
         except Exception as e:
@@ -166,21 +158,14 @@ class NotebookViewSet(viewsets.ModelViewSet):
             execution.error_message = str(e)
             execution.completed_at = timezone.now()
             execution.save()
-
             return Response(
-                {
-                    "success": False,
-                    "error": f"Server Error: {str(e)}",
-                    "static_analysis": {},
-                },
+                {"success": False, "error": f"Server Error: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    @action(
-        detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated]
-    )
+    @action(detail=True, methods=["post"])
     def generate_package(self, request, pk=None):
-        """Step 2: Generate reproducibility package with r4r"""
+        """Step 2: Generate Docker package (R4RExecutor)"""
         notebook = self.get_object()
 
         try:
@@ -191,7 +176,6 @@ class NotebookViewSet(viewsets.ModelViewSet):
                 ReproducibilityAnalysis.objects.update_or_create(
                     notebook=notebook,
                     defaults={
-                        "r4r_score": 100 if result.get("build_success") else 50,
                         "dockerfile": result.get("dockerfile", ""),
                         "makefile": result.get("makefile", ""),
                         "system_deps": result.get("manifest", {}).get(
@@ -209,16 +193,24 @@ class NotebookViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    @action(
-        detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated]
-    )
+    @action(detail=True, methods=["post"])
     def generate_diff(self, request, pk=None):
-        """Step 3: Generate semantic diff with r-diff"""
+        """Step 3: Generate Semantic Diff (RDiffExecutor)"""
         notebook = self.get_object()
 
         try:
             executor = RDiffExecutor()
             result = executor.execute(notebook.id)
+
+            if result.get("success"):
+                # Save the Diff HTML so it persists on reload
+                ReproducibilityAnalysis.objects.update_or_create(
+                    notebook=notebook,
+                    defaults={
+                        "diff_html": result.get("diff_html") or result.get("html", "")
+                    },
+                )
+
             return Response(result)
 
         except Exception as e:
@@ -228,26 +220,21 @@ class NotebookViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    @action(
-        detail=True, methods=["get"], permission_classes=[permissions.IsAuthenticated]
-    )
+    @action(detail=True, methods=["get"])
     def download(self, request, pk=None):
-        """Download notebook as .Rmd file"""
+        """Download raw .Rmd file"""
         notebook = self.get_object()
         response = HttpResponse(notebook.content, content_type="text/plain")
         response["Content-Disposition"] = f'attachment; filename="{notebook.title}.Rmd"'
         return response
 
-    @action(
-        detail=True, methods=["get"], permission_classes=[permissions.IsAuthenticated]
-    )
+    @action(detail=True, methods=["get"])
     def download_package(self, request, pk=None):
-        """Download reproducibility package as ZIP"""
+        """Download reproducibility ZIP"""
         notebook = self.get_object()
 
         try:
             zip_path = f"storage/notebooks/{notebook.id}/reproducibility_package.zip"
-
             if not os.path.exists(zip_path):
                 return Response(
                     {
@@ -266,17 +253,15 @@ class NotebookViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"])
     def executions(self, request, pk=None):
-        """Get execution history for notebook"""
+        """Get history"""
         notebook = self.get_object()
         executions = Execution.objects.filter(notebook=notebook).order_by("-started_at")
         serializer = ExecutionSerializer(executions, many=True)
         return Response(serializer.data)
 
-    @action(
-        detail=True, methods=["get"], permission_classes=[permissions.IsAuthenticated]
-    )
+    @action(detail=True, methods=["get"])
     def reproducibility(self, request, pk=None):
-        """Get reproducibility analysis for notebook"""
+        """Get analysis data"""
         notebook = self.get_object()
         try:
             serializer = ReproducibilityAnalysisSerializer(notebook.analysis)
@@ -290,21 +275,16 @@ class NotebookViewSet(viewsets.ModelViewSet):
 
 
 class ExecutionViewSet(viewsets.ReadOnlyModelViewSet):
-    """View execution history (Filtered by owner)"""
-
     serializer_class = ExecutionSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        """Only see executions of my notebooks"""
         return Execution.objects.filter(notebook__author=self.request.user).order_by(
             "-started_at"
         )
 
 
 class ReproducibilityAnalysisViewSet(viewsets.ReadOnlyModelViewSet):
-    """View reproducibility analyses (Filtered by owner)"""
-
     serializer_class = ReproducibilityAnalysisSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -315,11 +295,6 @@ class ReproducibilityAnalysisViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class UserLoginView(APIView):
-    """
-    POST /api/auth/login/
-    Login with username and return token
-    """
-
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -346,7 +321,6 @@ class UserLoginView(APIView):
                     },
                 }
             )
-
         return Response(
             {"error": "Invalid credentials"}, status=status.HTTP_400_BAD_REQUEST
         )
@@ -356,7 +330,6 @@ class UserProfileView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        """Get current user profile"""
         user = request.user
         return Response(
             {
@@ -369,14 +342,11 @@ class UserProfileView(APIView):
         )
 
     def patch(self, request):
-        """Update current user profile"""
         user = request.user
-
         user.first_name = request.data.get("first_name", user.first_name)
         user.last_name = request.data.get("last_name", user.last_name)
         user.email = request.data.get("email", user.email)
         user.save()
-
         return Response(
             {
                 "username": user.username,

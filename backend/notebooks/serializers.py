@@ -67,12 +67,9 @@ class UserSerializer(serializers.ModelSerializer):
 class ReproducibilityAnalysisSerializer(serializers.ModelSerializer):
     """
     Serializer for ReproducibilityAnalysis model.
-    Includes computed fields like warning count.
     """
 
     notebook_title = serializers.CharField(source="notebook.title", read_only=True)
-    warning_count = serializers.SerializerMethodField(read_only=True)
-    is_reproducible = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = ReproducibilityAnalysis
@@ -80,23 +77,15 @@ class ReproducibilityAnalysisSerializer(serializers.ModelSerializer):
             "id",
             "notebook",
             "notebook_title",
-            "r4r_score",
             "dependencies",
             "system_deps",
             "dockerfile",
             "makefile",
-            "warnings",
-            "warning_count",
-            "docker_image_tag",
-            "is_reproducible",
+            "diff_html",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at", "is_reproducible"]
-
-    def get_warning_count(self, obj):
-        """Return number of warnings"""
-        return len(obj.warnings) if obj.warnings else 0
+        read_only_fields = ["id", "created_at", "updated_at"]
 
 
 class ExecutionSerializer(serializers.ModelSerializer):
@@ -137,6 +126,7 @@ class NotebookSerializer(serializers.ModelSerializer):
     author = serializers.ReadOnlyField(source="author.username")
     author_id = serializers.ReadOnlyField(source="author.id")
 
+    # Uses the cleaned serializer above
     analysis = ReproducibilityAnalysisSerializer(read_only=True)
 
     execution_count = serializers.SerializerMethodField(read_only=True)
@@ -193,8 +183,7 @@ class NotebookSerializer(serializers.ModelSerializer):
             # Check if content looks like R markdown
             r_indicators = ["``````r", "library(", "require("]
             if not any(indicator in value for indicator in r_indicators):
-                # Warning but don't block
-                pass
+                pass  # Warning but don't block
         return value
 
 

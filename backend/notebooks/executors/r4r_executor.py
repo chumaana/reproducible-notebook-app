@@ -40,15 +40,11 @@ class R4RExecutor(BaseExecutor):
             env["HOME"] = "/home/r4r"
             env["VISUAL"] = "/bin/true"
 
-            html_path = os.path.join(temp_dir, "result.html")
-
             r4r_cmd = [
                 r4r_binary,
                 "-v",
                 "--output",
                 r4r_output_dir,
-                "--result",
-                html_path,
                 "R",
                 "-e",
                 "rmarkdown::render('notebook.Rmd')",

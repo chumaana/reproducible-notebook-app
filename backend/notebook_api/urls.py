@@ -26,5 +26,5 @@ urlpatterns = [
     path("api/auth/register/", UserRegisterView.as_view(), name="user-register"),
     path("api/", include(router.urls)),
     path("api-auth/", include("rest_framework.urls")),
-    path("api/profile/", UserProfileView.as_view(), name="user-profile"),
+    path("api/auth/profile/", UserProfileView.as_view(), name="user-profile"),
 ]

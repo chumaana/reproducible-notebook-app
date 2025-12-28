@@ -39,12 +39,18 @@ export interface DiffResponse {
 }
 
 export interface AnalysisData {
+  id?: number
   dockerfile?: string
   makefile?: string
-  manifest?: any
-  detected_packages?: string[]
+  diff_html?: string | null
+
+  system_deps?: string[]
+  dependencies?: any[]
+  manifest?: {
+    system_packages: string[]
+  }
   static_analysis?: {
-    issues: StaticAnalysisIssue[]
+    issues: any[]
   }
 }
 

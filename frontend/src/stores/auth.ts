@@ -1,63 +1,67 @@
 import { defineStore } from 'pinia'
 import api from '@/services/api'
+import axios from 'axios'
+
+interface User {
+  id: number
+  username: string
+  email: string
+}
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
-    token: localStorage.getItem('token') || (null as string | null),
-    user: JSON.parse(localStorage.getItem('user') || 'null'),
+    token: localStorage.getItem('token') as string | null,
+    user: JSON.parse(localStorage.getItem('user') || 'null') as User | null,
     loading: false,
     error: null as string | null,
   }),
 
   getters: {
-    isAuthenticated: (state) => !!state.token,
+    isAuthenticated: (state): boolean => !!state.token,
   },
 
   actions: {
-    async login(credentials: any) {
+    async login(credentials: Record<string, string>) {
       this.loading = true
       this.error = null
       try {
         const response = await api.login(credentials)
 
-        const token = response.token
-        const user = response.user
+        this.token = response.token
+        this.user = response.user
 
-        this.token = token
-        this.user = user
+        // 1. Persist to storage
+        localStorage.setItem('token', response.token)
+        localStorage.setItem('user', JSON.stringify(response.user))
 
-        localStorage.setItem('token', token)
-        localStorage.setItem('user', JSON.stringify(user))
+        api.setToken(response.token)
 
         return true
-      } catch (err: any) {
-        this.error = err.response?.data?.error || 'Login failed'
+      } catch (err: unknown) {
+        this.error = this.handleError(err)
         return false
       } finally {
         this.loading = false
       }
     },
 
-    async register(credentials: any) {
+    async register(credentials: Record<string, string>) {
       this.loading = true
       this.error = null
       try {
         const response = await api.register(credentials)
 
-        const token = response.token
-        const user = response.user
-
-        if (token) {
-          this.token = token
-          this.user = user
-          localStorage.setItem('token', token)
-          localStorage.setItem('user', JSON.stringify(user))
+        // If your backend returns token on registration
+        if (response.token) {
+          this.token = response.token
+          this.user = response.user
+          localStorage.setItem('token', response.token)
+          localStorage.setItem('user', JSON.stringify(response.user))
+          api.setToken(response.token)
         }
-
         return true
-      } catch (err: any) {
-        const errors = err.response?.data
-        this.error = Object.values(errors).flat().join(', ') || 'Registration failed'
+      } catch (err: unknown) {
+        this.error = this.handleError(err)
         return false
       } finally {
         this.loading = false
@@ -69,6 +73,20 @@ export const useAuthStore = defineStore('auth', {
       this.user = null
       localStorage.removeItem('token')
       localStorage.removeItem('user')
+
+      // Clean up headers in the API service
+      api.clearToken()
+    },
+
+    handleError(err: unknown): string {
+      if (axios.isAxiosError(err)) {
+        const data = err.response?.data
+        if (data && typeof data === 'object') {
+          return Object.values(data).flat().join(', ')
+        }
+        return err.message
+      }
+      return 'An unexpected error occurred'
     },
   },
 })

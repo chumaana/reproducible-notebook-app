@@ -1,159 +1,136 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { sha256 } from 'js-sha256'
 import api from '@/services/api'
-import type { Notebook, AnalysisData, StaticAnalysisIssue } from '@/types'
+import axios from 'axios'
+import type { Notebook, AnalysisData, StaticAnalysisIssue } from '@/types/types'
 
 export const useNotebookStore = defineStore('notebook', () => {
-  // --- STATE ---
-  const notebook = ref<Notebook>({ title: '', content: '' })
-  const analysis = ref<AnalysisData | null>(null)
-  const staticAnalysis = ref<any>(null)
+  const notebook = ref<Notebook>({
+    id: undefined,
+    title: 'Untitled Notebook',
+    content: '',
+    author: '',
+  })
 
-  // The hash of the content at the moment the package was built
-  const syncedContentHash = ref<string>('')
-
-  // Flags
   const executing = ref(false)
-  const packageGenerating = ref(false)
-  const diffGenerating = ref(false)
-  const packageLoading = ref(false) // State managed by store now
-
-  // Results
   const executionResult = ref<string | null>(null)
   const executionError = ref<string | null>(null)
+  const packageGenerating = ref(false)
+  const diffGenerating = ref(false)
+  const packageLoading = ref(false)
+  const analysis = ref<AnalysisData | null>(null)
   const diffResult = ref<string | null>(null)
+  const staticAnalysis = ref<{ issues: StaticAnalysisIssue[] } | null>(null)
 
-  // --- COMPUTED ---
-  const currentHash = computed(() => sha256(notebook.value.content || ''))
+  function getErrorMessage(err: unknown): string {
+    if (axios.isAxiosError(err)) {
+      return err.response?.data?.error || err.message
+    }
+    if (err instanceof Error) return err.message
+    return String(err)
+  }
 
-  const hasExecuted = computed(() => !!executionResult.value && executionResult.value.length > 0)
+  // === COMPUTED ===
+  const hasExecuted = computed(() => !!executionResult.value)
   const hasPackage = computed(() => !!analysis.value?.dockerfile)
+  const canDownloadPackage = computed(() => hasPackage.value)
+  const canGenerateDiff = computed(() => hasExecuted.value && hasPackage.value)
+  const warnings = computed(() => staticAnalysis.value?.issues || [])
 
-  // Package is up to date if we have a hash AND it matches current content
-  const isPackageUpToDate = computed(() => {
-    if (!syncedContentHash.value) return false
-    return syncedContentHash.value === currentHash.value
-  })
-
-  const canDownloadPackage = computed(() => {
-    // 1. If busy, no.
-    if (packageGenerating.value || packageLoading.value) return false
-
-    // 2. If no package exists on server, no.
-    if (!hasPackage.value) return false
-
-    // 3. If content has changed since last build, strict reproducibility says "No"
-    // (User must rebuild to get a package that matches current code)
-    if (!isPackageUpToDate.value) return false
-
-    return true
-  })
-
-  const canGenerateDiff = computed(() => {
-    return hasExecuted.value && hasPackage.value && !packageGenerating.value
-  })
-
-  const warnings = computed<StaticAnalysisIssue[]>(
-    () => staticAnalysis.value?.issues || analysis.value?.static_analysis?.issues || [],
-  )
-
-  // --- ACTIONS ---
-
+  // === ACTIONS ===
   function resetState() {
-    notebook.value = { title: '', content: '' }
-    analysis.value = null
-    staticAnalysis.value = null
-    syncedContentHash.value = ''
+    notebook.value = { title: 'Untitled Notebook', content: '' }
     executionResult.value = null
     executionError.value = null
+    analysis.value = null
     diffResult.value = null
+    staticAnalysis.value = null
     executing.value = false
     packageGenerating.value = false
+    diffGenerating.value = false
+    packageLoading.value = false
   }
 
   async function load(id: string) {
     resetState()
-
     try {
-      // 1. Load Notebook Basic Data
       notebook.value = await api.getNotebook(id)
 
-      // 2. Load Execution History
       try {
         const executions = await api.getExecutions(Number(id))
-        if (executions?.length > 0 && executions[0].status === 'completed') {
-          executionResult.value = executions[0].html_output
+        if (executions.length > 0) {
+          const lastExec = executions[0]
+          if (lastExec.status === 'completed') {
+            executionResult.value = lastExec.html_output
+          }
         }
       } catch (e) {
-        console.warn('Failed to load executions:', e)
+        console.warn('Execution history fetch skipped/failed:', getErrorMessage(e))
       }
 
-      // 3. Load Analysis (MAPPING LOGIC HERE)
       try {
         const rawData = await api.getAnalysis(Number(id))
-
-        console.log('Raw DB Data:', rawData) // Debugging
-
-        // --- MAP DATABASE FIELDS TO UI EXPECTATIONS ---
         analysis.value = {
           ...rawData,
-
-          // UI expects 'manifest.system_packages'
-          // DB has 'system_deps'
-          manifest: {
-            system_packages: rawData.system_deps || [],
-          },
-
-          // UI expects 'static_analysis.issues'
-          // DB (via views.py) writes issues into 'dependencies'
-          static_analysis: {
-            issues: rawData.dependencies || [],
-          },
-
-          // Map the score if you want to use it
-          score: rawData.r4r_score,
+          manifest: { system_packages: rawData.system_deps || [] },
+          static_analysis: { issues: rawData.dependencies || [] },
         }
 
-        // Populate the warnings/issues list for the editor
-        staticAnalysis.value = analysis.value.static_analysis
+        if (analysis.value.static_analysis) {
+          staticAnalysis.value = analysis.value.static_analysis
+        }
 
-        // Initialize Hash for "Package Up To Date" check
-        // If we have a Dockerfile OR system deps, we assume a package exists
-        if (rawData.dockerfile || (rawData.system_deps && rawData.system_deps.length > 0)) {
-          syncedContentHash.value = sha256(notebook.value.content || '')
+        if (rawData.diff_html) {
+          diffResult.value = rawData.diff_html
         }
       } catch (e) {
-        console.warn('Analysis not found (this is normal for new notebooks)', e)
+        console.warn('Analysis data fetch skipped/failed:', getErrorMessage(e))
       }
-    } catch (e: any) {
-      console.error('Critical error loading notebook:', e)
-      notebook.value.title = 'Error loading notebook'
-    }
-  }
-  async function save() {
-    if (notebook.value.id) {
-      await api.updateNotebook(notebook.value.id, notebook.value)
-    } else {
-      const created = await api.createNotebook(notebook.value)
-      notebook.value = created
+    } catch (err: unknown) {
+      console.error('Critical load failure:', err)
+      executionError.value = `Failed to load notebook: ${getErrorMessage(err)}`
     }
   }
 
+  async function save() {
+    try {
+      if (notebook.value.id) {
+        await api.updateNotebook(notebook.value.id, {
+          title: notebook.value.title,
+          content: notebook.value.content,
+        })
+      } else {
+        const newNb = await api.createNotebook({
+          title: notebook.value.title,
+          content: notebook.value.content,
+        })
+
+        notebook.value.id = newNb.id
+        return newNb.id
+      }
+    } catch (err: unknown) {
+      console.error('Save failed:', err)
+    }
+  }
   async function runLocal() {
-    if (!notebook.value.id) await save()
+    if (!notebook.value.id) return
     executing.value = true
     executionError.value = null
+
     try {
-      const res = await api.executeNotebook(notebook.value.id!)
+      await save()
+      const res = await api.executeNotebook(notebook.value.id)
+
       if (res.success) {
-        executionResult.value = res.html || ''
-        if (res.static_analysis) staticAnalysis.value = res.static_analysis
+        executionResult.value = res.html ?? null
+        if (res.static_analysis?.issues) {
+          staticAnalysis.value = { issues: res.static_analysis.issues }
+        }
       } else {
         executionError.value = res.error || 'Execution failed'
       }
-    } catch (e: any) {
-      executionError.value = e.response?.data?.error || e.message
+    } catch (err: unknown) {
+      executionError.value = getErrorMessage(err)
     } finally {
       executing.value = false
     }
@@ -162,25 +139,17 @@ export const useNotebookStore = defineStore('notebook', () => {
   async function runPackage() {
     if (!notebook.value.id) return
     packageGenerating.value = true
-    executionError.value = null
-
     try {
       const res = await api.generatePackage(notebook.value.id)
-      if (res.success) {
-        // Sync the hash on success
-        syncedContentHash.value = sha256(notebook.value.content || '')
-
-        analysis.value = {
-          ...analysis.value,
-          dockerfile: res.dockerfile,
-          makefile: res.makefile,
-          manifest: res.manifest,
+      if (res.success && analysis.value) {
+        analysis.value.dockerfile = res.dockerfile
+        analysis.value.makefile = res.makefile
+        if (res.manifest?.system_packages) {
+          analysis.value.manifest = { system_packages: res.manifest.system_packages }
         }
-      } else {
-        executionError.value = res.error || 'Package failed'
       }
-    } catch (e: any) {
-      executionError.value = e.response?.data?.error || e.message
+    } catch (err: unknown) {
+      console.error('Package generation failed:', getErrorMessage(err))
     } finally {
       packageGenerating.value = false
     }
@@ -189,68 +158,55 @@ export const useNotebookStore = defineStore('notebook', () => {
   async function runDiff() {
     if (!notebook.value.id) return
     diffGenerating.value = true
-    executionError.value = null
+    diffResult.value = null
     try {
       const res = await api.generateDiff(notebook.value.id)
       if (res.success) {
-        diffResult.value = res.diff_html || ''
-      } else {
-        executionError.value = res.error || 'Diff failed'
+        diffResult.value = res.diff_html || res.html || null
       }
-    } catch (e: any) {
-      executionError.value = e.response?.data?.error || e.message
+    } catch (err: unknown) {
+      console.error('Diff failed:', getErrorMessage(err))
     } finally {
       diffGenerating.value = false
     }
   }
 
-  // Moved Logic: Download
   async function downloadPackage() {
-    if (!notebook.value.id || !hasPackage.value) return
+    if (!notebook.value.id) return
+
     packageLoading.value = true
     try {
-      const blob = await api.downloadPackage(notebook.value.id)
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `notebook_${notebook.value.id}_package.zip`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-    } catch (e) {
-      console.error(e)
-      alert('Download failed')
+      console.log('Triggering download for notebook:', notebook.value.id)
+      await api.downloadPackage(notebook.value.id)
+      console.log('Download request finished successfully')
+    } catch (err: unknown) {
+      console.error('Download failed:', err)
     } finally {
       packageLoading.value = false
     }
   }
-
   return {
     notebook,
-    analysis,
-    staticAnalysis,
-    warnings,
     executing,
+    executionResult,
+    executionError,
     packageGenerating,
     diffGenerating,
     packageLoading,
-    executionResult,
-    executionError,
+    analysis,
+    staticAnalysis,
     diffResult,
-    // Computed
     hasExecuted,
     hasPackage,
-    canGenerateDiff,
     canDownloadPackage,
-    isPackageUpToDate, // Exposed for UI tooltips
-    // Actions
+    canGenerateDiff,
+    warnings,
     load,
     save,
+    resetState,
     runLocal,
     runPackage,
     runDiff,
-    downloadPackage, // Exposed action
-    resetState,
+    downloadPackage,
   }
 })
