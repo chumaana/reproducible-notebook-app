@@ -1,14 +1,45 @@
 import re
-from typing import List, Dict
+from typing import List, Dict, Tuple
+
+# Pattern definitions for detecting non-reproducible code
+RANDOM_PATTERNS: List[Tuple[str, str]] = [
+    (r"\bsample\s*\(", "sample()"),
+    (r"\brnorm\s*\(", "rnorm()"),
+    (r"\brunif\s*\(", "runif()"),
+    (r"\brbinom\s*\(", "rbinom()"),
+    (r"\bsample_n\s*\(", "sample_n()"),
+]
+
+SECRET_PATTERNS: List[str] = [
+    r"sk_live_[0-9a-zA-Z]{20,}",  # Stripe API keys
+    r"(?:api_key|access_token|secret)\s*=\s*['\"][a-zA-Z0-9_\-]{20,}['\"]",  # Generic secrets
+]
+
+# Absolute path pattern (Windows and Unix)
+ABSOLUTE_PATH_PATTERN = r'["\'](?:[a-zA-Z]:[\\/]|[\\/])[^"\']+["\']'
 
 
 class ReproducibilityAnalyzer:
+    """
+    Static analyzer for R Markdown notebooks.
+    Detects common reproducibility issues like randomness without seeds,
+    hardcoded paths, timestamps, and security issues.
+    """
 
     def analyze(self, rmd_content: str) -> Dict:
-        """Static analysis з line numbers"""
+        """
+        Perform static analysis on R Markdown content.
+
+        Args:
+            rmd_content: The R Markdown source code as string
+
+        Returns:
+            Dictionary with 'issues' list and 'total_issues' count
+        """
         lines = rmd_content.split("\n")
         issues = []
 
+        # Check for randomness without seed
         random_issues = self._detect_random_with_lines(lines)
         has_seed = any("set.seed" in line for line in lines)
         if random_issues and not has_seed:
@@ -23,6 +54,7 @@ class ReproducibilityAnalyzer:
                 }
             )
 
+        # Check for timestamp usage
         timestamp_lines = self._find_pattern_lines(lines, r"Sys\.(time|Date|timezone)")
         if timestamp_lines:
             issues.append(
@@ -36,6 +68,7 @@ class ReproducibilityAnalyzer:
                 }
             )
 
+        # Check for absolute paths
         path_lines = self._find_absolute_paths(lines)
         if path_lines:
             issues.append(
@@ -49,6 +82,7 @@ class ReproducibilityAnalyzer:
                 }
             )
 
+        # Check for external data downloads
         download_lines = self._find_pattern_lines(lines, r"download\.file|url\(")
         if download_lines:
             issues.append(
@@ -62,6 +96,7 @@ class ReproducibilityAnalyzer:
                 }
             )
 
+        # Check for hardcoded package installation
         install_lines = self._find_pattern_lines(lines, r"install\.packages\s*\(")
         if install_lines:
             issues.append(
@@ -75,6 +110,7 @@ class ReproducibilityAnalyzer:
                 }
             )
 
+        # Check for setwd() usage
         setwd_lines = self._find_pattern_lines(lines, r"setwd\s*\(")
         if setwd_lines:
             issues.append(
@@ -88,6 +124,7 @@ class ReproducibilityAnalyzer:
                 }
             )
 
+        # Check for interactive commands
         interactive_lines = self._find_pattern_lines(
             lines, r"\b(View|browser|edit|file\.choose)\s*\("
         )
@@ -103,6 +140,7 @@ class ReproducibilityAnalyzer:
                 }
             )
 
+        # Check for hardcoded secrets
         secret_lines = self._find_secrets(lines)
         if secret_lines:
             issues.append(
@@ -122,25 +160,22 @@ class ReproducibilityAnalyzer:
         }
 
     def _detect_random_with_lines(self, lines: List[str]) -> List[Dict]:
-        random_patterns = [
-            (r"\bsample\s*\(", "sample()"),
-            (r"\brnorm\s*\(", "rnorm()"),
-            (r"\brunif\s*\(", "runif()"),
-            (r"\brbinom\s*\(", "rbinom()"),
-            (r"\bsample_n\s*\(", "sample_n()"),
-        ]
+        """Detect usage of random functions in R code"""
         found = []
         for line_num, line in enumerate(lines, start=1):
+            # Skip comments
             if line.strip().startswith("#"):
                 continue
-            for pattern, func_name in random_patterns:
+            for pattern, func_name in RANDOM_PATTERNS:
                 if re.search(pattern, line):
                     found.append({"line_number": line_num, "code": line.strip()})
         return found
 
     def _find_pattern_lines(self, lines: List[str], pattern: str) -> List[Dict]:
+        """Find lines matching a specific regex pattern"""
         found = []
         for line_num, line in enumerate(lines, start=1):
+            # Skip comments
             if line.strip().startswith("#"):
                 continue
             if re.search(pattern, line):
@@ -148,18 +183,21 @@ class ReproducibilityAnalyzer:
         return found
 
     def _find_absolute_paths(self, lines: List[str]) -> List[Dict]:
+        """Detect absolute file paths in code"""
         found = []
-        path_pattern = r'["\'](?:[a-zA-Z]:[\\/]|[\\/])[^"\']+["\']'
 
         for line_num, line in enumerate(lines, start=1):
+            # Skip comments
             if line.strip().startswith("#"):
                 continue
 
+            # Skip library/require lines (they might contain package names with slashes)
             if "library(" in line or "require(" in line:
                 continue
 
-            matches = re.findall(path_pattern, line)
+            matches = re.findall(ABSOLUTE_PATH_PATTERN, line)
             for match in matches:
+                # Skip URLs
                 if "://" in match or "http" in match:
                     continue
                 found.append(
@@ -168,17 +206,15 @@ class ReproducibilityAnalyzer:
         return found
 
     def _find_secrets(self, lines: List[str]) -> List[Dict]:
+        """Detect potential API keys and secrets in code"""
         found = []
-        patterns = [
-            r"sk_live_[0-9a-zA-Z]{20,}",
-            r"(?:api_key|access_token|secret)\s*=\s*['\"][a-zA-Z0-9_\-]{20,}['\"]",
-        ]
 
         for line_num, line in enumerate(lines, start=1):
+            # Skip comments
             if line.strip().startswith("#"):
                 continue
-            for p in patterns:
-                if re.search(p, line):
-                    masked_code = re.sub(p, "***SECRET***", line.strip())
+            for pattern in SECRET_PATTERNS:
+                if re.search(pattern, line):
+                    masked_code = re.sub(pattern, "***SECRET***", line.strip())
                     found.append({"line_number": line_num, "code": masked_code})
         return found

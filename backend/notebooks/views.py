@@ -18,7 +18,7 @@ from .serializers import (
     ExecutionSerializer,
     ReproducibilityAnalysisSerializer,
 )
-from .r_executor import RExecutor
+from .executors import RmdExecutor, R4RExecutor, RDiffExecutor
 
 
 class UserRegisterView(APIView):
@@ -133,8 +133,8 @@ class NotebookViewSet(viewsets.ModelViewSet):
         execution = Execution.objects.create(notebook=notebook, status="running")
 
         try:
-            executor = RExecutor()
-            result = executor.execute_rmd_simple(notebook.content, str(notebook.id))
+            executor = RmdExecutor()
+            result = executor.execute(notebook.content, notebook.id)
 
             if result.get("success"):
                 execution.html_output = result.get("html", "")
@@ -184,8 +184,8 @@ class NotebookViewSet(viewsets.ModelViewSet):
         notebook = self.get_object()
 
         try:
-            executor = RExecutor()
-            result = executor.generate_reproducibility_package(notebook.id)
+            executor = R4RExecutor()
+            result = executor.execute(notebook.id)
 
             if result.get("success"):
                 ReproducibilityAnalysis.objects.update_or_create(
@@ -199,12 +199,6 @@ class NotebookViewSet(viewsets.ModelViewSet):
                         ),
                     },
                 )
-
-                zip_path = executor.create_reproducibility_zip(notebook.id)
-                if zip_path:
-                    print(f"Package created: {zip_path}")
-                else:
-                    print("Warning: Failed to create package ZIP")
 
             return Response(result)
 
@@ -223,8 +217,8 @@ class NotebookViewSet(viewsets.ModelViewSet):
         notebook = self.get_object()
 
         try:
-            executor = RExecutor()
-            result = executor.generate_semantic_diff(notebook.id)
+            executor = RDiffExecutor()
+            result = executor.execute(notebook.id)
             return Response(result)
 
         except Exception as e:

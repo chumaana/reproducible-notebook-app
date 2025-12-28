@@ -4,7 +4,18 @@ from .models import Notebook, ReproducibilityAnalysis, Execution
 
 
 class UserSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, required=True, min_length=8)
+    """
+    Serializer for User model with password hashing and notebook count.
+    Used for registration and profile management.
+    """
+
+    password = serializers.CharField(
+        write_only=True,
+        required=True,
+        min_length=8,
+        style={"input_type": "password"},
+        help_text="Password must be at least 8 characters",
+    )
     notebook_count = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
@@ -25,6 +36,22 @@ class UserSerializer(serializers.ModelSerializer):
         """Return number of notebooks user created"""
         return obj.notebooks.count()
 
+    def validate_username(self, value):
+        """Ensure username is alphanumeric"""
+        if not value.replace("_", "").replace("-", "").isalnum():
+            raise serializers.ValidationError(
+                "Username must contain only letters, numbers, hyphens and underscores"
+            )
+        return value
+
+    def validate_email(self, value):
+        """Ensure email is not already taken"""
+        if self.instance and self.instance.email == value:
+            return value
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("Email is already in use")
+        return value
+
     def create(self, validated_data):
         """Create user with hashed password"""
         user = User.objects.create_user(
@@ -38,8 +65,14 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class ReproducibilityAnalysisSerializer(serializers.ModelSerializer):
+    """
+    Serializer for ReproducibilityAnalysis model.
+    Includes computed fields like warning count.
+    """
+
     notebook_title = serializers.CharField(source="notebook.title", read_only=True)
     warning_count = serializers.SerializerMethodField(read_only=True)
+    is_reproducible = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = ReproducibilityAnalysis
@@ -55,10 +88,11 @@ class ReproducibilityAnalysisSerializer(serializers.ModelSerializer):
             "warnings",
             "warning_count",
             "docker_image_tag",
+            "is_reproducible",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = ["id", "created_at", "updated_at", "is_reproducible"]
 
     def get_warning_count(self, obj):
         """Return number of warnings"""
@@ -66,6 +100,11 @@ class ReproducibilityAnalysisSerializer(serializers.ModelSerializer):
 
 
 class ExecutionSerializer(serializers.ModelSerializer):
+    """
+    Serializer for Execution model.
+    Includes computed duration field.
+    """
+
     notebook_title = serializers.CharField(source="notebook.title", read_only=True)
     duration_seconds = serializers.SerializerMethodField(read_only=True)
 
@@ -86,13 +125,15 @@ class ExecutionSerializer(serializers.ModelSerializer):
 
     def get_duration_seconds(self, obj):
         """Calculate execution duration"""
-        if obj.completed_at and obj.started_at:
-            delta = obj.completed_at - obj.started_at
-            return round(delta.total_seconds(), 2)
-        return None
+        return obj.duration
 
 
 class NotebookSerializer(serializers.ModelSerializer):
+    """
+    Full serializer for Notebook model.
+    Includes nested analysis and computed fields.
+    """
+
     author = serializers.ReadOnlyField(source="author.username")
     author_id = serializers.ReadOnlyField(source="author.id")
 
@@ -140,9 +181,28 @@ class NotebookSerializer(serializers.ModelSerializer):
         """Check if notebook has reproducibility analysis"""
         return hasattr(obj, "analysis")
 
+    def validate_title(self, value):
+        """Ensure title is not empty or whitespace only"""
+        if not value.strip():
+            raise serializers.ValidationError("Title cannot be empty")
+        return value.strip()
+
+    def validate_content(self, value):
+        """Basic R markdown validation"""
+        if value and len(value) > 10:
+            # Check if content looks like R markdown
+            r_indicators = ["``````r", "library(", "require("]
+            if not any(indicator in value for indicator in r_indicators):
+                # Warning but don't block
+                pass
+        return value
+
 
 class NotebookListSerializer(serializers.ModelSerializer):
-    """Lightweight serializer for notebook lists (without content)"""
+    """
+    Lightweight serializer for notebook lists (without content).
+    Optimized for list views with minimal data transfer.
+    """
 
     author = serializers.ReadOnlyField(source="author.username")
     execution_count = serializers.SerializerMethodField(read_only=True)
@@ -162,7 +222,9 @@ class NotebookListSerializer(serializers.ModelSerializer):
         ]
 
     def get_execution_count(self, obj):
+        """Return number of executions"""
         return obj.executions.count()
 
     def get_has_analysis(self, obj):
+        """Check if notebook has reproducibility analysis"""
         return hasattr(obj, "analysis")

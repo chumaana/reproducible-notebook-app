@@ -1,187 +1,39 @@
 <template>
   <div id="app">
-    <nav class="navbar">
-      <div class="container navbar-container">
-        <RouterLink to="/" class="navbar-brand">
-          <span>R Notebook</span>
-        </RouterLink>
-
-        <div class="navbar-nav">
-
-          <template v-if="authStore.isAuthenticated">
-            <RouterLink to="/" class="nav-link">Home</RouterLink>
-            <RouterLink to="/notebooks" class="nav-link">Notebooks</RouterLink>
-          </template>
-
-          <RouterLink to="/help" class="nav-link">Help</RouterLink>
-
-          <div v-if="authStore.isAuthenticated" class="nav-user">
-            <RouterLink to="/profile" class="nav-link">
-              <div class="user-info">
-                <i class="fas fa-user-circle"></i>
-                <span>{{ authStore.user?.username }}</span>
-              </div>
-            </RouterLink>
-            <button @click="handleLogout" class="btn-logout" title="Sign Out">
-              <i class="fas fa-sign-out-alt"></i>
-            </button>
-          </div>
-
-          <div v-else class="nav-guest">
-            <RouterLink to="/login" class="nav-link">Login</RouterLink>
-            <RouterLink to="/register" class="btn-register">Get Started</RouterLink>
-          </div>
-
-        </div>
-      </div>
-    </nav>
-
-    <main>
+    <AppHeader />
+    <main class="main-content">
       <RouterView />
     </main>
+    <AppFooter v-if="showFooter" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { RouterLink, RouterView, useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
+import { RouterView } from 'vue-router'
+import AppHeader from '@/components/AppHeader.vue'
+import AppFooter from '@/components/AppFooter.vue'
 
-const authStore = useAuthStore()
-const router = useRouter()
+const route = useRoute()
 
-const handleLogout = () => {
-  authStore.logout()
-  router.push('/login')
-}
+// Hide footer on editor page (full height layout)
+const showFooter = computed(() => {
+  return route.name !== 'notebook-editor'
+})
 </script>
 
-<style scoped>
-/* --- Layout --- */
+<style>
 #app {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: #f9fafb;
+  background-color: #f5f5f5;
 }
 
-.navbar {
-  background: white;
-  border-bottom: 1px solid #e5e7eb;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-
-
-.container {
-  margin: 0 auto;
-}
-
-.navbar-container {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  height: 64px;
-}
-
-.navbar-brand {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #4f46e5;
-  text-decoration: none;
-}
-
-.navbar-nav {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-}
-
-.nav-link {
-  color: #4b5563;
-  text-decoration: none;
-  font-weight: 500;
-  font-size: 0.95rem;
-  transition: color 0.2s;
-}
-
-.nav-link:hover,
-.nav-link.router-link-active {
-  color: #4f46e5;
-  font-weight: 600;
-}
-
-.nav-user {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding-left: 1rem;
-  border-left: 1px solid #e5e7eb;
-}
-
-.user-info {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: #374151;
-  font-weight: 600;
-  font-size: 0.9rem;
-}
-
-.btn-logout {
-  background: none;
-  border: none;
-  color: #9ca3af;
-  cursor: pointer;
-  font-size: 1rem;
-  padding: 5px;
-  transition: color 0.2s;
-}
-
-.btn-logout:hover {
-  color: #dc2626;
-}
-
-.nav-guest {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.btn-register {
-  background-color: #4f46e5;
-  color: white;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  text-decoration: none;
-  font-size: 0.9rem;
-  font-weight: 500;
-  transition: background-color 0.2s;
-}
-
-.btn-register:hover {
-  background-color: #4338ca;
-}
-
-main {
+.main-content {
   flex: 1;
-}
-
-@media (max-width: 768px) {
-  .navbar-container {
-    flex-direction: column;
-    height: auto;
-    padding: 1rem;
-    gap: 1rem;
-  }
-
-  .nav-user {
-    border-left: none;
-    padding-left: 0;
-  }
+  display: flex;
+  flex-direction: column;
 }
 </style>
