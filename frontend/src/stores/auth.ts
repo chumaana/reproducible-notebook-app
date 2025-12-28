@@ -1,3 +1,8 @@
+/**
+ * Authentication Store
+ * Manages user authentication state, login/register operations, and token persistence.
+ */
+
 import { defineStore } from 'pinia'
 import api from '@/services/api'
 import axios from 'axios'
@@ -6,6 +11,17 @@ interface User {
   id: number
   username: string
   email: string
+}
+
+interface LoginCredentials {
+  username: string
+  password: string
+}
+
+interface RegisterCredentials {
+  username: string
+  email: string
+  password: string
 }
 
 export const useAuthStore = defineStore('auth', {
@@ -21,18 +37,24 @@ export const useAuthStore = defineStore('auth', {
   },
 
   actions: {
-    async login(credentials: Record<string, string>) {
+    /**
+     * Logs in a user with provided credentials.
+     *
+     * @param credentials - Username and password
+     * @returns True if login successful, false otherwise
+     */
+    async login(credentials: LoginCredentials) {
       this.loading = true
       this.error = null
+
       try {
         const response = await api.login(credentials)
-
         this.token = response.token
         this.user = response.user
 
+        // Persist to localStorage
         localStorage.setItem('token', response.token)
         localStorage.setItem('user', JSON.stringify(response.user))
-
         api.setToken(response.token)
 
         return true
@@ -44,19 +66,29 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    async register(credentials: Record<string, string>) {
+    /**
+     * Registers a new user account.
+     *
+     * @param credentials - Username, email, and password
+     * @returns True if registration successful, false otherwise
+     */
+    async register(credentials: RegisterCredentials) {
       this.loading = true
       this.error = null
+
       try {
         const response = await api.register(credentials)
 
         if (response.token) {
           this.token = response.token
           this.user = response.user
+
+          // Persist to localStorage
           localStorage.setItem('token', response.token)
           localStorage.setItem('user', JSON.stringify(response.user))
           api.setToken(response.token)
         }
+
         return true
       } catch (err: unknown) {
         this.error = this.handleError(err)
@@ -66,16 +98,30 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
+    /**
+     * Logs out the current user and clears authentication state.
+     */
     logout() {
       this.token = null
       this.user = null
       localStorage.removeItem('token')
       localStorage.removeItem('user')
-
-      // Clean up headers in the API service
       api.clearToken()
     },
 
+    /**
+     * Clears the current error message.
+     */
+    clearError() {
+      this.error = null
+    },
+
+    /**
+     * Extracts error message from various error types.
+     *
+     * @param err - Error object
+     * @returns Formatted error message string
+     */
     handleError(err: unknown): string {
       if (axios.isAxiosError(err)) {
         const data = err.response?.data

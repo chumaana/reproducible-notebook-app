@@ -1,14 +1,21 @@
+"""
+R-Diff Executor for generating semantic diffs between execution outputs.
+Compares local and container HTML outputs to detect reproducibility issues.
+"""
+
 import os
 import tempfile
 import time
 from typing import Dict, Any
-
 from .base import BaseExecutor
 from ..services.storage_manager import StorageManager
 
 
 class RDiffExecutor(BaseExecutor):
-    """Executor for generating semantic diff between local and container HTML"""
+    """
+    Executor for generating semantic diff between local and container HTML outputs.
+    Uses the r-diff tool to compare execution results.
+    """
 
     def __init__(self):
         super().__init__()
@@ -16,17 +23,29 @@ class RDiffExecutor(BaseExecutor):
         self.rdiff_binary = "/usr/local/bin/r-diff"
 
     def execute(self, notebook_id: int) -> Dict[str, Any]:
-        """Generate semantic diff using r-diff tool"""
+        """
+        Generate semantic diff using r-diff tool.
+
+        Args:
+            notebook_id: ID of the notebook to generate diff for
+
+        Returns:
+            Dictionary containing:
+                - success: bool
+                - diff_html: str (HTML visualization of differences)
+                - logs: str
+                - error: str (if failed)
+        """
         start_time = time.time()
         self._log_header(f"GENERATING SEMANTIC DIFF - NOTEBOOK {notebook_id}")
 
         final_dir = self.storage_manager.get_notebook_dir(notebook_id)
-
         local_html = os.path.abspath(os.path.join(final_dir, "notebook_local.html"))
         container_html = os.path.abspath(
             os.path.join(final_dir, "notebook_container.html")
         )
 
+        # Verify both HTML files exist
         if not os.path.exists(local_html):
             return {
                 "success": False,
@@ -67,6 +86,7 @@ class RDiffExecutor(BaseExecutor):
                     "logs": diff_res.stdout + diff_res.stderr,
                 }
 
+            # Read and save diff HTML
             diff_html_content = self.storage_manager.read_file(
                 temp_dir, "semantic_diff.html"
             )

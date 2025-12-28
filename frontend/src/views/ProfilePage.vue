@@ -65,23 +65,48 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * User profile page component.
+ * Allows users to view and edit their profile information with edit/cancel functionality.
+ */
+
 import { ref, onMounted } from 'vue'
 import api from '@/services/api'
+import { getErrorMessage } from '@/utils/helpers'
 
-const profile = ref({
+interface ProfileData {
+    username: string
+    email: string
+    first_name: string
+    last_name: string
+    date_joined: string
+}
+
+const profile = ref<ProfileData>({
     username: '',
     email: '',
     first_name: '',
     last_name: '',
-    date_joined: ''
+    date_joined: '',
 })
 
-const originalProfile = ref({})
+// Store original profile data for cancel operation
+const originalProfile = ref<ProfileData>({
+    username: '',
+    email: '',
+    first_name: '',
+    last_name: '',
+    date_joined: '',
+})
+
 const editing = ref(false)
 const saving = ref(false)
 const successMessage = ref('')
 const errorMessage = ref('')
 
+/**
+ * Loads user profile data from API.
+ */
 const loadProfile = async () => {
     try {
         const data = await api.getUserProfile()
@@ -93,6 +118,9 @@ const loadProfile = async () => {
     }
 }
 
+/**
+ * Saves profile changes to API.
+ */
 const saveProfile = async () => {
     saving.value = true
     successMessage.value = ''
@@ -110,29 +138,39 @@ const saveProfile = async () => {
         editing.value = false
         successMessage.value = 'Profile updated successfully!'
 
+        // Clear success message after 3 seconds
         setTimeout(() => {
             successMessage.value = ''
         }, 3000)
-    } catch (error: any) {
-        console.error('Failed to save profile:', error)
-        errorMessage.value = error.response?.data?.error || 'Failed to save profile'
+    } catch (err: unknown) {
+        console.error('Failed to save profile:', err)
+        errorMessage.value = getErrorMessage(err)
     } finally {
         saving.value = false
     }
 }
 
+/**
+ * Cancels edit mode and restores original profile data.
+ */
 const cancelEdit = () => {
     profile.value = { ...originalProfile.value }
     editing.value = false
     errorMessage.value = ''
 }
 
+/**
+ * Formats a date string for display.
+ * 
+ * @param date - ISO date string
+ * @returns Formatted date string
+ */
 const formatDate = (date: string) => {
     if (!date) return ''
     return new Date(date).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'long',
-        day: 'numeric'
+        day: 'numeric',
     })
 }
 

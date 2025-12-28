@@ -1,13 +1,11 @@
 <template>
   <div class="help-page">
     <div class="container">
-      <!-- Header -->
       <div class="help-header">
         <h1><i class="fas fa-question-circle"></i> Help & Documentation</h1>
         <p>Learn how to use the R Notebook Editor</p>
       </div>
 
-      <!-- Quick Links -->
       <div class="quick-links">
         <a href="#getting-started" class="quick-link">
           <i class="fas fa-rocket"></i>
@@ -23,7 +21,6 @@
         </a>
       </div>
 
-      <!-- Getting Started -->
       <section id="getting-started" class="help-section">
         <h2><i class="fas fa-rocket"></i> Getting Started</h2>
 
@@ -39,7 +36,6 @@
         </div>
       </section>
 
-      <!-- Using the Editor -->
       <section id="editor" class="help-section">
         <h2><i class="fas fa-code"></i> Editor Guide</h2>
 

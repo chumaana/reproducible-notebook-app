@@ -6,20 +6,15 @@
                     <h3>R Notebook Editor</h3>
                     <p>Reproducible R notebooks with automatic dependency tracking.</p>
                 </div>
-
-
                 <div class="footer-section">
                     <h4>Resources</h4>
                     <ul class="footer-links">
                         <li><a href="https://github.com/chumaana/reproducible-notebook-app" target="_blank">GitHub</a>
                         </li>
-
                         <li><a href="https://r-tooling.github.io/" target="_blank">R4R Documentation</a></li>
-
                     </ul>
                 </div>
             </div>
-
             <div class="footer-bottom">
                 <p>&copy; {{ currentYear }} R Notebook Editor</p>
             </div>
@@ -28,6 +23,11 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Application footer component with project information and external links.
+ * Displays current year dynamically.
+ */
+
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 

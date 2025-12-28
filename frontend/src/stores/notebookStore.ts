@@ -1,3 +1,7 @@
+/**
+ * Notebook Store
+ * Manages notebook editing, execution, and reproducibility analysis
+ */
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import api from '@/services/api'
@@ -5,7 +9,7 @@ import { getErrorMessage } from '@/utils/helpers'
 import type { Notebook, AnalysisData, StaticAnalysisIssue, R4RData } from '@/types/index'
 
 export const useNotebookStore = defineStore('notebook', () => {
-  // ==================== STATE ====================
+  // State
   const notebook = ref<Notebook>({
     id: undefined,
     title: 'Untitled Notebook',
@@ -25,7 +29,7 @@ export const useNotebookStore = defineStore('notebook', () => {
   const saveError = ref<string | null>(null)
   const r4rData = ref<R4RData | null>(null)
 
-  // ==================== COMPUTED ====================
+  // Computed
   const hasExecuted = computed(() => !!executionResult.value)
   const hasPackage = computed(() => !!analysis.value?.dockerfile)
   const canDownloadPackage = computed(() => hasPackage.value)
@@ -37,11 +41,7 @@ export const useNotebookStore = defineStore('notebook', () => {
       executing.value || packageGenerating.value || diffGenerating.value || packageLoading.value,
   )
 
-  // ==================== ACTIONS ====================
-
-  /**
-   * Reset all state to initial values
-   */
+  // Actions
   function resetState() {
     notebook.value = {
       id: undefined,
@@ -63,44 +63,38 @@ export const useNotebookStore = defineStore('notebook', () => {
   }
 
   /**
-   * Load notebook by ID
+   * Load notebook and its analysis data
    */
   async function load(id: string): Promise<void> {
     resetState()
     executionError.value = null
 
     try {
-      // Load notebook data (includes nested analysis from backend)
       notebook.value = await api.getNotebook(id)
 
-      // If notebook has analysis nested, extract it
       if (notebook.value.analysis) {
         analysis.value = notebook.value.analysis
 
-        // Extract static analysis issues from dependencies field
         if (analysis.value.dependencies) {
           staticAnalysis.value = {
             issues: analysis.value.dependencies,
           }
         }
 
-        // If diff_html exists, set it
         if (analysis.value.diff_html) {
           diffResult.value = analysis.value.diff_html
         }
+
         if (analysis.value.r4r_data) {
           r4rData.value = analysis.value.r4r_data
         }
       }
 
-      // Load execution history (non-critical)
       try {
         const executions = await api.getExecutions(Number(id))
-        if (executions.length > 0) {
-          const lastExec = executions[0]
-          if (lastExec.status === 'completed') {
-            executionResult.value = lastExec.html_output
-          }
+        const lastExec = executions[0]
+        if (lastExec && lastExec.status === 'completed') {
+          executionResult.value = lastExec.html_output
         }
       } catch (e) {
         console.warn('Execution history unavailable:', getErrorMessage(e))
@@ -113,22 +107,17 @@ export const useNotebookStore = defineStore('notebook', () => {
     }
   }
 
-  /**
-   * Save current notebook
-   */
   async function save(): Promise<number | undefined> {
     saveError.value = null
 
     try {
       if (notebook.value.id) {
-        // Update existing notebook
         await api.updateNotebook(notebook.value.id, {
           title: notebook.value.title,
           content: notebook.value.content,
         })
         return notebook.value.id
       } else {
-        // Create new notebook
         const newNb = await api.createNotebook({
           title: notebook.value.title,
           content: notebook.value.content,
@@ -145,7 +134,7 @@ export const useNotebookStore = defineStore('notebook', () => {
   }
 
   /**
-   * Execute notebook locally
+   * Execute notebook locally and run static analysis
    */
   async function runLocal(): Promise<void> {
     if (!notebook.value.id) {
@@ -157,15 +146,12 @@ export const useNotebookStore = defineStore('notebook', () => {
     executionError.value = null
 
     try {
-      // Save before executing
       await save()
-
       const res = await api.executeNotebook(notebook.value.id)
 
       if (res.success) {
         executionResult.value = res.html ?? null
 
-        // Backend saves static analysis to ReproducibilityAnalysis.dependencies
         if (res.static_analysis?.issues) {
           staticAnalysis.value = {
             issues: res.static_analysis.issues,
@@ -182,7 +168,7 @@ export const useNotebookStore = defineStore('notebook', () => {
   }
 
   /**
-   * Generate reproducibility package
+   * Generate reproducibility package with R4R
    */
   async function runPackage(): Promise<void> {
     if (!notebook.value.id) {
@@ -196,10 +182,10 @@ export const useNotebookStore = defineStore('notebook', () => {
       const res = await api.generatePackage(notebook.value.id)
 
       if (res.success) {
-        // Update local analysis state
         if (!analysis.value) {
           analysis.value = {}
         }
+
         if (res.r4r_data) {
           r4rData.value = res.r4r_data
         }
@@ -210,8 +196,6 @@ export const useNotebookStore = defineStore('notebook', () => {
         if (res.manifest?.system_packages) {
           analysis.value.system_deps = res.manifest.system_packages
         }
-        console.log('kjhbjhbhb')
-        alert('Package has been generated!\n')
       }
     } catch (err: unknown) {
       console.error('Package generation failed:', getErrorMessage(err))
@@ -222,7 +206,7 @@ export const useNotebookStore = defineStore('notebook', () => {
   }
 
   /**
-   * Generate diff between original and executed
+   * Generate semantic diff between local and container execution
    */
   async function runDiff(): Promise<void> {
     if (!notebook.value.id) {
@@ -237,7 +221,6 @@ export const useNotebookStore = defineStore('notebook', () => {
       const res = await api.generateDiff(notebook.value.id)
 
       if (res.success) {
-        // Backend returns diff_html or html
         diffResult.value = res.diff_html || res.html || null
       }
     } catch (err: unknown) {
@@ -248,9 +231,6 @@ export const useNotebookStore = defineStore('notebook', () => {
     }
   }
 
-  /**
-   * Download reproducibility package as ZIP
-   */
   async function downloadPackage(): Promise<void> {
     if (!notebook.value.id) {
       console.error('Cannot download: notebook not saved')
@@ -260,9 +240,7 @@ export const useNotebookStore = defineStore('notebook', () => {
     packageLoading.value = true
 
     try {
-      console.log('Downloading package for notebook:', notebook.value.id)
       await api.downloadPackage(notebook.value.id)
-      console.log('Download completed successfully')
     } catch (err: unknown) {
       console.error('Download failed:', getErrorMessage(err))
       throw err
@@ -271,15 +249,11 @@ export const useNotebookStore = defineStore('notebook', () => {
     }
   }
 
-  /**
-   * Clear all error messages
-   */
   function clearErrors(): void {
     executionError.value = null
     saveError.value = null
   }
 
-  // ==================== RETURN ====================
   return {
     // State
     notebook,
@@ -294,7 +268,6 @@ export const useNotebookStore = defineStore('notebook', () => {
     staticAnalysis,
     diffResult,
     r4rData,
-
     // Computed
     hasExecuted,
     hasPackage,

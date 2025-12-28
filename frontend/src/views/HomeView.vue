@@ -1,6 +1,5 @@
 <template>
   <div class="home-container">
-    <!-- Hero Section -->
     <section class="hero">
       <div class="container">
         <div class="hero-content-center">
@@ -78,7 +77,6 @@
       </div>
     </section>
 
-    <!-- Features -->
     <section class="features">
       <div class="container">
         <h2>Write R Code. Get Reproducible Environment.</h2>
@@ -222,7 +220,6 @@
       </div>
     </section>
 
-    <!-- CTA -->
     <section class="cta">
       <div class="container">
         <h2>Start Creating Reproducible Notebooks</h2>

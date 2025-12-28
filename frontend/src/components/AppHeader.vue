@@ -10,29 +10,24 @@
                         </div>
                     </div>
                 </RouterLink>
-
                 <button class="mobile-menu-toggle" :class="{ active: mobileMenuOpen }" @click="toggleMobileMenu"
                     aria-label="Toggle menu">
                     <i class="fas" :class="mobileMenuOpen ? 'fa-times' : 'fa-bars'"></i>
                 </button>
-
                 <div class="navbar-nav" :class="{ open: mobileMenuOpen }">
                     <RouterLink to="/" class="nav-link" @click="closeMobileMenu">
                         <i class="fas fa-home"></i>
                         <span>Home</span>
                     </RouterLink>
-
                     <RouterLink v-if="authStore.isAuthenticated" to="/notebooks" class="nav-link"
                         @click="closeMobileMenu">
                         <i class="fas fa-folder"></i>
                         <span>Notebooks</span>
                     </RouterLink>
-
                     <RouterLink to="/help" class="nav-link" @click="closeMobileMenu">
                         <i class="fas fa-question-circle"></i>
                         <span>Help</span>
                     </RouterLink>
-
                     <div v-if="authStore.isAuthenticated" class="nav-user">
                         <RouterLink to="/profile" class="nav-link user-link" @click="closeMobileMenu">
                             <i class="fas fa-user-circle"></i>
@@ -43,7 +38,6 @@
                             <span class="logout-text">Logout</span>
                         </button>
                     </div>
-
                     <div v-else class="nav-guest">
                         <RouterLink to="/login" class="nav-link" @click="closeMobileMenu">
                             Login
@@ -54,19 +48,24 @@
                         </RouterLink>
                     </div>
                 </div>
-
             </div>
         </nav>
     </header>
 </template>
 
 <script setup lang="ts">
+/**
+ * Main application header with navigation and authentication controls.
+ * Includes responsive mobile menu and conditional rendering based on auth state.
+ */
+
 import { ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
 const authStore = useAuthStore()
 const router = useRouter()
+
 const mobileMenuOpen = ref(false)
 
 const toggleMobileMenu = () => {

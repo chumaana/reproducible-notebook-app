@@ -1,6 +1,5 @@
 <template>
     <div class="notebook-editor">
-
         <div class="editor-header">
             <input v-model="notebookTitle" @blur="handleSave" class="notebook-title" placeholder="Untitled Notebook">
 
@@ -12,7 +11,6 @@
         </div>
 
         <div class="editor-split-view">
-
             <div class="editor-pane">
                 <div class="pane-header">
                     <h3><i class="fas fa-code"></i> R Script</h3>
@@ -48,30 +46,48 @@
                 <DiffModal :diff-html="diffResult" @close="showDiffModal = false" />
             </div>
         </Transition>
-
     </div>
 </template>
 
 <script setup lang="ts">
+/**
+ * Main notebook editor component.
+ * Provides split-pane editor with R code input, execution output, analysis drawer, and diff visualization.
+ * Handles auto-save, R Markdown conversion, and resizable panes.
+ */
+
 import { ref, watch, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useNotebookStore } from '@/stores/notebookStore'
-import { useMarkdown } from '@/composables/useMarkdown' // <--- The wrapper logic
+import { useMarkdown } from '@/composables/useMarkdown'
 
-// Components
 import EditorToolbar from '@/components/editor/EditorToolbar.vue'
 import OutputPane from '@/components/editor/OutputPane.vue'
-import AnalysisDrawer from '@/components/analysis/AnalysisDrawer.vue' // Assumption: You created this
-import DiffModal from '@/components/analysis/DiffModal.vue'         // Assumption: You created this
+import AnalysisDrawer from '@/components/analysis/AnalysisDrawer.vue'
+import DiffModal from '@/components/analysis/DiffModal.vue'
 
 const route = useRoute()
 const store = useNotebookStore()
+
+// Extract reactive state from store
 const {
-    notebook, executing, executionResult, executionError,
-    packageGenerating, diffGenerating, packageLoading,
-    hasExecuted, hasPackage, canGenerateDiff, canDownloadPackage,
-    warnings, analysis, diffResult, staticAnalysis, r4rData
+    notebook,
+    executing,
+    executionResult,
+    executionError,
+    packageGenerating,
+    diffGenerating,
+    packageLoading,
+    hasExecuted,
+    hasPackage,
+    canGenerateDiff,
+    canDownloadPackage,
+    warnings,
+    analysis,
+    diffResult,
+    staticAnalysis,
+    r4rData,
 } = storeToRefs(store)
 
 const notebookTitle = ref('Untitled Notebook')
@@ -82,9 +98,6 @@ const paneWidth = ref(600)
 const placeholderText = `# Write your R code here...`
 
 const { extractCleanContent, generateFullRmd } = useMarkdown(notebookTitle, cleanContent)
-
-
-
 
 onMounted(async () => {
     const id = route.params.id as string
@@ -98,6 +111,7 @@ onMounted(async () => {
     cleanContent.value = extractCleanContent(store.notebook.content)
 })
 
+// Sync local state with store when content or title changes
 watch([cleanContent, notebookTitle], () => {
     store.notebook.content = generateFullRmd()
     store.notebook.title = notebookTitle.value
@@ -107,10 +121,12 @@ const handleSave = async () => {
     await store.save()
 }
 
+// Auto-save after 2 seconds of inactivity
 const debouncedSave = debounce(() => handleSave(), 2000)
+
 const handleDiff = async () => {
     await store.runDiff()
-    console.log("PARENT after runDiff:", diffResult.value)
+    console.log('PARENT after runDiff:', diffResult.value)
     if (diffResult.value) {
         showDiffModal.value = true
     }
@@ -127,6 +143,11 @@ const downloadRmd = () => {
     URL.revokeObjectURL(url)
 }
 
+/**
+ * Handles resizable split pane drag operation.
+ * 
+ * @param e - Mouse event from drag start
+ */
 const startResize = (e: MouseEvent) => {
     const startX = e.clientX
     const startWidth = paneWidth.value
@@ -144,13 +165,24 @@ const startResize = (e: MouseEvent) => {
     document.addEventListener('mouseup', onUp)
 }
 
-function debounce(fn: Function, delay: number) {
-    let timeout: any
-    return (...args: any[]) => {
+/**
+ * Creates a debounced version of a function.
+ * 
+ * @param fn - Function to debounce
+ * @param delay - Delay in milliseconds
+ * @returns Debounced function
+ */
+function debounce<T extends (...args: unknown[]) => unknown>(
+    fn: T,
+    delay: number
+): (...args: Parameters<T>) => void {
+    let timeout: ReturnType<typeof setTimeout>
+    return (...args: Parameters<T>) => {
         clearTimeout(timeout)
         timeout = setTimeout(() => fn(...args), delay)
     }
 }
+
 const adjustedIssues = computed(() => {
     return staticAnalysis.value?.issues || []
 })

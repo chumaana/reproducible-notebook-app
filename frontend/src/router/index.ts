@@ -1,3 +1,8 @@
+/**
+ * Vue Router configuration for the R Notebook Editor application.
+ * Defines routes, navigation guards, and scroll behavior.
+ */
+
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
@@ -67,7 +72,6 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true,
     },
   },
-  // 404 catch-all
   {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
@@ -94,23 +98,27 @@ const router = createRouter({
   },
 })
 
-// Navigation guard
+/**
+ * Navigation guard for authentication and page titles.
+ * Redirects unauthenticated users to login, and authenticated users away from guest-only pages.
+ */
 router.beforeEach((to, from, next) => {
   const authStore = useAuthStore()
 
   document.title = (to.meta.title as string) || 'R Notebook Editor'
+
   const requiresAuth = to.meta.requiresAuth as boolean
   const guestOnly = to.meta.guestOnly as boolean
   const isAuthenticated = authStore.isAuthenticated
 
   if (requiresAuth && !isAuthenticated) {
-    // Redirect to login if auth required
+    // Redirect to login if authentication required
     next({
       name: 'login',
       query: { redirect: to.fullPath },
     })
   } else if (guestOnly && isAuthenticated) {
-    // Redirect authenticated users away from login/register
+    // Redirect authenticated users away from login/register pages
     next({ name: 'home' })
   } else {
     next()

@@ -1,6 +1,5 @@
 <template>
     <div class="analysis-modal-bottom">
-
         <div class="modal-header-bottom">
             <h3><i class="fas fa-chart-bar"></i> Reproducibility Analysis</h3>
             <button @click="$emit('close')" class="modal-close-btn" title="Close">
@@ -9,12 +8,11 @@
         </div>
 
         <div class="modal-body-bottom">
-
             <div v-if="props.r4rData" class="section">
                 <h4><i class="fab fa-docker"></i> Environment Metrics</h4>
 
                 <div class="metrics-grid">
-                    <div class="metric-card" :class="{ 'expanded': showAllPackages }">
+                    <div class="metric-card" :class="{ expanded: showAllPackages }">
                         <div class="card-header" @click="showAllPackages = !showAllPackages">
                             <div class="header-left">
                                 <div class="icon-box r-icon"><i class="fas fa-cube"></i></div>
@@ -39,7 +37,7 @@
                         </div>
                     </div>
 
-                    <div class="metric-card" :class="{ 'expanded': showAllSysLibs }">
+                    <div class="metric-card" :class="{ expanded: showAllSysLibs }">
                         <div class="card-header" @click="showAllSysLibs = !showAllSysLibs">
                             <div class="header-left">
                                 <div class="icon-box sys-icon"><i class="fas fa-cogs"></i></div>
@@ -109,69 +107,68 @@
                     {{ packageLoading ? 'Downloading...' : 'Download Reproducibility Package' }}
                 </button>
             </div>
-
         </div>
     </div>
 </template>
 
 <script setup lang="ts">
+/**
+ * Drawer component for displaying reproducibility analysis results.
+ * Shows R4R environment metrics, detected issues, and code context with issue highlighting.
+ */
+
 import { ref, computed } from 'vue'
 import CodeHighlighter from '@/components/common/CodeHighlighter.vue'
-import type { StaticAnalysisIssue } from '@/types/index'
-
-// --- Interfaces ---
-interface R4RData {
-    r_packages?: string[];
-    system_libs?: string[];
-    files_accessed?: number;
-}
+import type { StaticAnalysisIssue, R4RData } from '@/types/index'
 
 interface IssueLine {
-    line_number: number;
-    code: string;
+    line_number: number
+    code: string
 }
 
-// --- Props ---
 const props = defineProps<{
-    issues: StaticAnalysisIssue[];
-    code: string;
-    diffResult?: string | null;
-    packageLoading: boolean;
-    hasStaticAnalysis: boolean;
-    r4rData?: R4RData;
-}>();
+    issues: StaticAnalysisIssue[]
+    code: string
+    diffResult?: string | null
+    packageLoading: boolean
+    hasStaticAnalysis: boolean
+    r4rData?: R4RData | null
+}>()
 
-defineEmits(['close', 'openDiff', 'download']);
+defineEmits<{
+    close: []
+    openDiff: []
+    download: []
+}>()
 
-// --- Local State ---
-const showAllPackages = ref(false);
-const showAllSysLibs = ref(false);
+const showAllPackages = ref(false)
+const showAllSysLibs = ref(false)
 
-// --- Computeds ---
-const rPackages = computed(() => props.r4rData?.r_packages || []);
-const sysLibs = computed(() => props.r4rData?.system_libs || []);
+const rPackages = computed(() => props.r4rData?.r_packages || [])
+const sysLibs = computed(() => props.r4rData?.system_libs || [])
 
+// Show first 5 items when collapsed, all when expanded
 const visiblePackages = computed(() =>
     showAllPackages.value ? rPackages.value : rPackages.value.slice(0, 5)
-);
+)
 
 const visibleSysLibs = computed(() =>
     showAllSysLibs.value ? sysLibs.value : sysLibs.value.slice(0, 5)
-);
+)
 
-// --- Helpers ---
+/**
+ * Formats issue line numbers for display.
+ * 
+ * @param lines - Array of issue lines
+ * @returns Comma-separated line numbers (e.g., "1, 2, 5")
+ */
 const formatLines = (lines: IssueLine[]): string => {
-    if (!lines || lines.length === 0) return '';
-    return lines.map(l => l.line_number).join(', ');
-};
+    if (!lines || lines.length === 0) return ''
+    return lines.map((l) => l.line_number).join(', ')
+}
 </script>
 
 <style scoped>
-/* We only add NEW styles for the metric cards.
-   All container styles (.analysis-modal-bottom, etc.) 
-   are inherited from your global CSS file.
-*/
-
 .metrics-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -187,7 +184,6 @@ const formatLines = (lines: IssueLine[]): string => {
     transition: all 0.2s ease;
 }
 
-/* Make card take full width when expanded so tags have room */
 .metric-card.expanded {
     grid-column: 1 / -1;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
@@ -217,7 +213,6 @@ const formatLines = (lines: IssueLine[]): string => {
     gap: 10px;
 }
 
-/* Icon Boxes matching your theme (Indigo/Purple) */
 .icon-box {
     width: 32px;
     height: 32px;
@@ -231,12 +226,10 @@ const formatLines = (lines: IssueLine[]): string => {
 
 .r-icon {
     background: #6366f1;
-    /* Your Primary Color */
 }
 
 .sys-icon {
     background: #8b5cf6;
-    /* Your Secondary Color */
 }
 
 .meta {
@@ -279,7 +272,6 @@ const formatLines = (lines: IssueLine[]): string => {
     font-style: italic;
 }
 
-/* Reusing your existing tag styles, but adding the 'show more' button style */
 .show-more-btn {
     background: white;
     border: 1px dashed #d1d5db;

@@ -1,3 +1,8 @@
+"""
+Base executor class providing common utilities for all notebook executors.
+Includes command execution, logging, and error handling functionality.
+"""
+
 import subprocess
 import datetime
 from typing import Optional, Dict, Any
@@ -5,7 +10,10 @@ from abc import ABC, abstractmethod
 
 
 class BaseExecutor(ABC):
-    """Base class for all executors with common utilities"""
+    """
+    Abstract base class for all executor implementations.
+    Provides shared utilities for command execution, logging, and error responses.
+    """
 
     def __init__(self):
         self.logger_name = self.__class__.__name__
@@ -18,7 +26,19 @@ class BaseExecutor(ABC):
         env: Optional[Dict[str, str]] = None,
         timeout: int = 300,
     ) -> subprocess.CompletedProcess:
-        """Execute shell command with logging"""
+        """
+        Execute a shell command with logging and error handling.
+
+        Args:
+            cmd: Command and arguments as list
+            cwd: Working directory for command execution
+            desc: Description for logging
+            env: Environment variables
+            timeout: Command timeout in seconds
+
+        Returns:
+            CompletedProcess object with stdout, stderr, and returncode
+        """
         self._log(f"[{desc}] Running...")
 
         try:
@@ -45,16 +65,16 @@ class BaseExecutor(ABC):
             )
 
     def _log(self, msg: str, level: str = "INFO"):
-        """Log message with timestamp"""
+        """Log message with timestamp and logger name."""
         timestamp = datetime.datetime.now().strftime("%H:%M:%S")
         print(f"[{timestamp}] [{level}] [{self.logger_name}] {msg}", flush=True)
 
     def _log_header(self, msg: str):
-        """Log header message"""
+        """Log major section header."""
         print(f"\n== {msg} ==", flush=True)
 
     def _log_section(self, msg: str):
-        """Log section message"""
+        """Log minor section header."""
         print(f"\n--- {msg} ---", flush=True)
 
     def _error_response(
@@ -64,7 +84,18 @@ class BaseExecutor(ABC):
         html: str = "",
         static_analysis: Optional[Dict] = None,
     ) -> Dict[str, Any]:
-        """Create error response dict"""
+        """
+        Create standardized error response dictionary.
+
+        Args:
+            msg: Error message summary
+            detail: Detailed error information
+            html: HTML output (if any)
+            static_analysis: Static analysis results
+
+        Returns:
+            Dictionary with error information
+        """
         return {
             "success": False,
             "error": f"{msg}:\n{detail}",
@@ -74,5 +105,14 @@ class BaseExecutor(ABC):
 
     @abstractmethod
     def execute(self, *args, **kwargs) -> Dict[str, Any]:
-        """Main execution method - must be implemented by subclasses"""
+        """
+        Main execution method - must be implemented by subclasses.
+
+        Returns:
+            Dictionary containing execution results with keys:
+                - success: bool
+                - html: str (on success)
+                - error: str (on failure)
+                - static_analysis: dict (optional)
+        """
         pass

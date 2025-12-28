@@ -1,4 +1,10 @@
+/**
+ * TypeScript type definitions for the R Notebook Editor application.
+ * Defines interfaces for authentication, notebooks, execution, analysis, and reproducibility data.
+ */
+
 // ==================== USER & AUTH ====================
+
 export interface User {
   id: number
   username: string
@@ -15,6 +21,7 @@ export interface AuthResponse {
 }
 
 // ==================== NOTEBOOK ====================
+
 export interface Notebook {
   id?: number
   title: string
@@ -31,6 +38,7 @@ export interface Notebook {
 }
 
 // ==================== EXECUTION ====================
+
 export interface Execution {
   id: number
   notebook: number
@@ -55,6 +63,7 @@ export interface ExecutionResponse {
 }
 
 // ==================== STATIC ANALYSIS ====================
+
 export interface StaticAnalysisIssue {
   code: string
   title: string
@@ -65,6 +74,7 @@ export interface StaticAnalysisIssue {
 }
 
 // ==================== REPRODUCIBILITY ANALYSIS ====================
+
 export interface AnalysisData {
   id?: number
   notebook?: number
@@ -80,16 +90,22 @@ export interface AnalysisData {
 }
 
 // ==================== R4R REPRODUCIBILITY ====================
+
+/**
+ * R4R (R for Reproducibility) data containing environment information
+ * captured during notebook execution.
+ */
 export interface R4RData {
-  r_packages: string[]
-  system_libs: string[]
-  files_accessed: number
-  image_size_mb?: number
-  reproducibility_score?: number
-  cache_hit?: boolean
+  r_packages: string[] // List of R packages used
+  system_libs: string[] // System libraries required
+  files_accessed: number // Number of files accessed during execution
+  image_size_mb?: number // Docker image size in megabytes
+  reproducibility_score?: number // Calculated reproducibility score
+  cache_hit?: boolean // Whether R4R used cached results
 }
 
 // ==================== PACKAGE & DIFF ====================
+
 export interface PackageResponse {
   success: boolean
   dockerfile?: string
@@ -101,12 +117,12 @@ export interface PackageResponse {
   r4r_data?: R4RData
   build_success?: boolean
   duration_seconds?: number
-  package_ready?: boolean
+  package_ready?: boolean // Whether package is ready for download
 }
 
 export interface DiffResponse {
   success: boolean
-  diff_html?: string
+  diff_html?: string // HTML diff visualization
   html?: string
   error?: string
 }

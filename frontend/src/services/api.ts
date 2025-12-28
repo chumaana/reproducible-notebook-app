@@ -1,4 +1,4 @@
-import axios from 'axios'
+import axios, { type AxiosInstance, type AxiosError } from 'axios'
 import type {
   Notebook,
   ExecutionResponse,
@@ -6,117 +6,175 @@ import type {
   DiffResponse,
   AnalysisData,
   Execution,
-} from '@/types'
+} from '@/types/index'
 
-const api = axios.create({
-  baseURL: 'http://localhost:8000/api',
-  headers: { 'Content-Type': 'application/json' },
-  timeout: 600000,
-})
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
+const API_TIMEOUT = 600000
 
-const savedToken = localStorage.getItem('token')
-if (savedToken) {
-  api.defaults.headers.common['Authorization'] = `Token ${savedToken}`
-}
+/**
+ * API Service for communicating with Django backend
+ * Handles authentication, notebook operations, and reproducibility features
+ */
+class ApiService {
+  private api: AxiosInstance
 
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token')
-  if (token) config.headers.Authorization = `Token ${token}`
-  return config
-})
+  constructor() {
+    this.api = axios.create({
+      baseURL: API_BASE_URL,
+      timeout: API_TIMEOUT,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
 
-export default {
-  setToken(token: string) {
-    api.defaults.headers.common['Authorization'] = `Token ${token}`
-  },
+    this.setupInterceptors()
+    this.initializeToken()
+  }
 
-  clearToken() {
-    delete api.defaults.headers.common['Authorization']
-  },
+  /**
+   * Configure request/response interceptors for authentication and error handling
+   */
+  private setupInterceptors(): void {
+    this.api.interceptors.request.use(
+      (config) => {
+        const token = localStorage.getItem('token')
+        if (token) {
+          config.headers.Authorization = `Token ${token}`
+        }
+        return config
+      },
+      (error) => Promise.reject(error),
+    )
 
-  async login(credentials: any) {
-    const res = await api.post('/auth/login/', credentials)
-    return res.data
-  },
+    this.api.interceptors.response.use(
+      (response) => response,
+      (error: AxiosError) => {
+        if (error.response?.status === 401) {
+          localStorage.removeItem('token')
+          localStorage.removeItem('user')
+          if (window.location.pathname !== '/login') {
+            window.location.href = '/login'
+          }
+        }
+        return Promise.reject(error)
+      },
+    )
+  }
 
-  async register(credentials: any) {
-    const res = await api.post('/auth/register/', credentials)
-    return res.data
-  },
+  private initializeToken(): void {
+    const token = localStorage.getItem('token')
+    if (token) {
+      this.setToken(token)
+    }
+  }
+
+  public setToken(token: string): void {
+    localStorage.setItem('token', token)
+    this.api.defaults.headers.common['Authorization'] = `Token ${token}`
+  }
+
+  public clearToken(): void {
+    localStorage.removeItem('token')
+    delete this.api.defaults.headers.common['Authorization']
+  }
+
+  // Authentication
+  async login(credentials: { username: string; password: string }) {
+    const response = await this.api.post('/auth/login/', credentials)
+    return response.data
+  }
+
+  async register(credentials: { username: string; email: string; password: string }) {
+    const response = await this.api.post('/auth/register/', credentials)
+    return response.data
+  }
+
   async getUserProfile() {
-    const res = await api.get('/auth/profile/')
-    return res.data
-  },
+    const response = await this.api.get('/auth/profile/')
+    return response.data
+  }
 
-  async updateUserProfile(data: any) {
-    const res = await api.patch('/auth/profile/', data)
-    return res.data
-  },
+  async updateUserProfile(data: Record<string, unknown>) {
+    const response = await this.api.patch('/auth/profile/', data)
+    return response.data
+  }
 
+  // Notebooks
   async getNotebooks(): Promise<Notebook[]> {
-    return (await api.get('/notebooks/')).data
-  },
+    const response = await this.api.get('/notebooks/')
+    return response.data
+  }
+
+  async getNotebook(id: string | number): Promise<Notebook> {
+    const response = await this.api.get(`/notebooks/${id}/`)
+    return response.data
+  }
+
+  async createNotebook(data: Partial<Notebook>): Promise<Notebook> {
+    const response = await this.api.post('/notebooks/', data)
+    return response.data
+  }
+
+  async updateNotebook(id: number, data: Partial<Notebook>): Promise<Notebook> {
+    const response = await this.api.patch(`/notebooks/${id}/`, data)
+    return response.data
+  }
 
   async deleteNotebook(id: number): Promise<void> {
-    await api.delete(`/notebooks/${id}/`)
-  },
+    await this.api.delete(`/notebooks/${id}/`)
+  }
 
-  // --- EDITOR METHODS ---
-  async getNotebook(id: string | number): Promise<Notebook> {
-    return (await api.get(`/notebooks/${id}/`)).data
-  },
-
-  async createNotebook(data: Notebook): Promise<Notebook> {
-    return (await api.post('/notebooks/', data)).data
-  },
-
-  async updateNotebook(id: number, data: Notebook): Promise<Notebook> {
-    return (await api.patch(`/notebooks/${id}/`, data)).data
-  },
-
-  // --- EXECUTION PIPELINE ---
+  // Execution
   async executeNotebook(id: number): Promise<ExecutionResponse> {
-    return (await api.post(`/notebooks/${id}/execute/`)).data
-  },
+    const response = await this.api.post(`/notebooks/${id}/execute/`)
+    return response.data
+  }
 
   async generatePackage(id: number): Promise<PackageResponse> {
-    return (await api.post(`/notebooks/${id}/generate_package/`)).data
-  },
+    const response = await this.api.post(`/notebooks/${id}/generate_package/`)
+    return response.data
+  }
 
   async generateDiff(id: number): Promise<DiffResponse> {
-    return (await api.post(`/notebooks/${id}/generate_diff/`)).data
-  },
+    const response = await this.api.post(`/notebooks/${id}/generate_diff/`)
+    return response.data
+  }
 
-  // --- ANALYSIS & DOWNLOADS ---
+  // Analysis
   async getAnalysis(id: number): Promise<AnalysisData> {
-    return (await api.get(`/notebooks/${id}/reproducibility/`)).data
-  },
+    const response = await this.api.get(`/notebooks/${id}/reproducibility/`)
+    return response.data
+  }
 
+  /**
+   * Download reproducibility package as ZIP file
+   */
   async downloadPackage(id: number | string): Promise<void> {
-    // 1. We must use responseType: 'blob' so axios doesn't try to parse ZIP as JSON
-    const response = await api.get(`/notebooks/${id}/download_package/`, {
+    const response = await this.api.get(`/notebooks/${id}/download_package/`, {
       responseType: 'blob',
     })
 
-    // 2. Create a URL for the blob data
     const url = window.URL.createObjectURL(new Blob([response.data]))
-
-    // 3. Create a temporary hidden link
     const link = document.createElement('a')
     link.href = url
 
-    // 4. Set the filename (Backend usually provides this, or we set a default)
-    link.setAttribute('download', `reproducibility_package_${id}.zip`)
+    const contentDisposition = response.headers['content-disposition']
+    const filename = contentDisposition
+      ? contentDisposition.split('filename=')[1]?.replace(/"/g, '')
+      : `reproducibility_package_${id}.zip`
 
-    // 5. Append, click, and cleanup
+    link.setAttribute('download', filename)
     document.body.appendChild(link)
     link.click()
 
-    // Cleanup to avoid memory leaks
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
-  },
+  }
+
   async getExecutions(id: number): Promise<Execution[]> {
-    return (await api.get(`/notebooks/${id}/executions/`)).data
-  },
+    const response = await this.api.get(`/notebooks/${id}/executions/`)
+    return response.data
+  }
 }
+
+export default new ApiService()

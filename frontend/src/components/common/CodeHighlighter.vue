@@ -2,19 +2,11 @@
   <div class="code-highlighter">
     <div v-for="(line, idx) in lines" :key="idx" class="code-line" :class="getLineClass(idx + 1)"
       @mouseenter="hoveredLine = idx + 1" @mouseleave="hoveredLine = null">
-
-      <!-- Line Number -->
       <span class="line-number">{{ idx + 1 }}</span>
-
-      <!-- Code Content -->
       <span class="line-code">{{ line }}</span>
-
-      <!-- Issue Indicator -->
       <span v-if="getIssueForLine(idx + 1)" class="issue-indicator">
         <i class="fas fa-exclamation-triangle"></i>
       </span>
-
-      <!-- Tooltip on hover -->
       <div v-if="hoveredLine === idx + 1 && getIssueForLine(idx + 1)" class="issue-tooltip">
         <strong>{{ getIssueForLine(idx + 1).title }}</strong>
         <p>{{ getIssueForLine(idx + 1).fix }}</p>
@@ -24,6 +16,11 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Displays code with line numbers and highlights lines containing reproducibility issues.
+ * Shows issue tooltips on hover with severity-based styling.
+ */
+
 import { computed, ref } from 'vue'
 
 const props = defineProps<{
@@ -40,6 +37,7 @@ const hoveredLine = ref<number | null>(null)
 
 const lines = computed(() => props.code.split('\n'))
 
+// Map line numbers to their associated issues for quick lookup
 const issuesByLine = computed(() => {
   const map = new Map()
   props.issues.forEach(issue => {
@@ -50,10 +48,15 @@ const issuesByLine = computed(() => {
   return map
 })
 
+/**
+ * Returns CSS class based on issue severity.
+ * 
+ * @param lineNum - Line number to check
+ * @returns Object with severity CSS class
+ */
 function getLineClass(lineNum: number) {
   const issue = issuesByLine.value.get(lineNum)
   if (!issue) return ''
-
   return {
     'line-error': issue.severity === 'high',
     'line-warning': issue.severity === 'medium',
@@ -61,6 +64,12 @@ function getLineClass(lineNum: number) {
   }
 }
 
+/**
+ * Gets the issue associated with a specific line number.
+ * 
+ * @param lineNum - Line number to check
+ * @returns Issue object or undefined
+ */
 function getIssueForLine(lineNum: number) {
   return issuesByLine.value.get(lineNum)
 }

@@ -1,14 +1,35 @@
+"""
+Static analysis tool for detecting reproducibility issues in R Markdown code.
+"""
+
 import re
 from typing import List, Dict
 
 
 class ReproducibilityAnalyzer:
+    """
+    Analyzes R Markdown content for reproducibility issues.
+
+    Detects common problems that affect reproducibility including randomness
+    without seeds, absolute paths, time-dependent code, and security issues.
+    """
 
     def analyze(self, rmd_content: str) -> Dict:
-        """Static analysis з line numbers"""
+        """
+        Perform static analysis on R Markdown content.
+
+        Args:
+            rmd_content: R Markdown source code as string.
+
+        Returns:
+            Dictionary containing:
+                - issues: List of detected issues with severity and line numbers.
+                - total_issues: Total count of issue occurrences.
+        """
         lines = rmd_content.split("\n")
         issues = []
 
+        # Check for random functions without seed
         random_issues = self._detect_random_with_lines(lines)
         has_seed = any("set.seed" in line for line in lines)
         if random_issues and not has_seed:
@@ -23,6 +44,7 @@ class ReproducibilityAnalyzer:
                 }
             )
 
+        # Check for time-dependent code
         timestamp_lines = self._find_pattern_lines(lines, r"Sys\.(time|Date|timezone)")
         if timestamp_lines:
             issues.append(
@@ -36,6 +58,7 @@ class ReproducibilityAnalyzer:
                 }
             )
 
+        # Check for absolute file paths
         path_lines = self._find_absolute_paths(lines)
         if path_lines:
             issues.append(
@@ -49,6 +72,7 @@ class ReproducibilityAnalyzer:
                 }
             )
 
+        # Check for external data downloads
         download_lines = self._find_pattern_lines(lines, r"download\.file|url\(")
         if download_lines:
             issues.append(
@@ -62,6 +86,7 @@ class ReproducibilityAnalyzer:
                 }
             )
 
+        # Check for install.packages()
         install_lines = self._find_pattern_lines(lines, r"install\.packages\s*\(")
         if install_lines:
             issues.append(
@@ -75,6 +100,7 @@ class ReproducibilityAnalyzer:
                 }
             )
 
+        # Check for setwd()
         setwd_lines = self._find_pattern_lines(lines, r"setwd\s*\(")
         if setwd_lines:
             issues.append(
@@ -88,6 +114,7 @@ class ReproducibilityAnalyzer:
                 }
             )
 
+        # Check for interactive commands
         interactive_lines = self._find_pattern_lines(
             lines, r"\b(View|browser|edit|file\.choose)\s*\("
         )
@@ -103,6 +130,7 @@ class ReproducibilityAnalyzer:
                 }
             )
 
+        # Check for hardcoded secrets
         secret_lines = self._find_secrets(lines)
         if secret_lines:
             issues.append(
@@ -122,6 +150,15 @@ class ReproducibilityAnalyzer:
         }
 
     def _detect_random_with_lines(self, lines: List[str]) -> List[Dict]:
+        """
+        Detect random number generation functions.
+
+        Args:
+            lines: List of code lines.
+
+        Returns:
+            List of dictionaries with line_number and code for each occurrence.
+        """
         random_patterns = [
             (r"\bsample\s*\(", "sample()"),
             (r"\brnorm\s*\(", "rnorm()"),
@@ -139,6 +176,16 @@ class ReproducibilityAnalyzer:
         return found
 
     def _find_pattern_lines(self, lines: List[str], pattern: str) -> List[Dict]:
+        """
+        Find lines matching a regex pattern.
+
+        Args:
+            lines: List of code lines.
+            pattern: Regular expression pattern to search for.
+
+        Returns:
+            List of dictionaries with line_number and code for each match.
+        """
         found = []
         for line_num, line in enumerate(lines, start=1):
             if line.strip().startswith("#"):
@@ -148,6 +195,15 @@ class ReproducibilityAnalyzer:
         return found
 
     def _find_absolute_paths(self, lines: List[str]) -> List[Dict]:
+        """
+        Detect absolute file paths in code.
+
+        Args:
+            lines: List of code lines.
+
+        Returns:
+            List of dictionaries with line_number, code, and matched path.
+        """
         found = []
         path_pattern = r'["\'](?:[a-zA-Z]:[\\/]|[\\/])[^"\']+["\']'
 
@@ -155,11 +211,13 @@ class ReproducibilityAnalyzer:
             if line.strip().startswith("#"):
                 continue
 
+            # Skip library/require statements
             if "library(" in line or "require(" in line:
                 continue
 
             matches = re.findall(path_pattern, line)
             for match in matches:
+                # Skip URLs
                 if "://" in match or "http" in match:
                     continue
                 found.append(
@@ -168,6 +226,15 @@ class ReproducibilityAnalyzer:
         return found
 
     def _find_secrets(self, lines: List[str]) -> List[Dict]:
+        """
+        Detect potential hardcoded API keys and secrets.
+
+        Args:
+            lines: List of code lines.
+
+        Returns:
+            List of dictionaries with line_number and masked code.
+        """
         found = []
         patterns = [
             r"sk_live_[0-9a-zA-Z]{20,}",
