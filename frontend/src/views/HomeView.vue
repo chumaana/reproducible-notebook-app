@@ -1,248 +1,238 @@
 <template>
   <div class="home-container">
-    <div class="hero-section">
-      <div class="hero-content">
-        <h1 class="hero-title">
-          <i class="fas fa-flask"></i>
-          Reproducible R Notebook
-        </h1>
-        <p class="hero-description">
-          Create and share reproducible R notebooks with automatic dependency detection using R4R
+    <section class="hero">
+      <div class="container">
+        <div class="hero-content-center">
+          <div class="hero-badge">
+            <span class="badge-dot"></span>
+            <span>Reproducible R Notebooks</span>
+          </div>
+
+          <h1>R Notebooks That<br />Actually Reproduce</h1>
+
+          <p class="hero-lead">
+            Web editor with automatic dependency tracking, static analysis,
+            and Docker export. Write code that runs everywhere.
+          </p>
+
+          <div class="hero-cta">
+            <RouterLink to="/notebook/new" class="btn-hero-primary">
+              Create Notebook
+              <i class="fas fa-arrow-right"></i>
+            </RouterLink>
+            <RouterLink to="/notebooks" class="btn-hero-secondary">
+              <i class="fas fa-folder"></i>
+              My Notebooks
+            </RouterLink>
+          </div>
+
+          <div class="hero-features">
+            <div class="hero-feature">
+              <i class="fas fa-robot"></i>
+              <span>R4R Powered</span>
+            </div>
+            <div class="hero-feature">
+              <i class="fas fa-code-compare"></i>
+              <span>RDiff Validation</span>
+            </div>
+            <div class="hero-feature">
+              <i class="fab fa-docker"></i>
+              <span>Docker Export</span>
+            </div>
+            <div class="hero-feature">
+              <i class="fas fa-shield-alt"></i>
+              <span>97.5% Success Rate</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Problem/Solution -->
+    <section class="problem-solution">
+      <div class="container">
+        <h2>Stop Fighting with Dependencies</h2>
+
+        <div class="comparison-grid">
+          <div class="comparison-col problem">
+            <h3>Traditional Notebooks</h3>
+            <ul>
+              <li>Code breaks when shared</li>
+              <li>Missing package versions</li>
+              <li>Hardcoded file paths</li>
+              <li>Hours debugging environments</li>
+            </ul>
+          </div>
+
+          <div class="comparison-col solution">
+            <h3>This Tool</h3>
+            <ul>
+              <li>Dependencies tracked automatically</li>
+              <li>Versions locked by R4R</li>
+              <li>Static analysis warns about paths</li>
+              <li>Docker export in one click</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="features">
+      <div class="container">
+        <h2>Write R Code. Get Reproducible Environment.</h2>
+        <p class="section-subtitle">
+          Web editor with automatic dependency tracking and Docker export
         </p>
 
-        <div class="hero-actions">
-          <RouterLink to="/notebook/new" class="btn btn-primary btn-lg">
-            <i class="fas fa-plus"></i>
-            Create New Notebook
-          </RouterLink>
-          <RouterLink to="/notebooks" class="btn btn-outline btn-lg">
-            <i class="fas fa-folder-open"></i>
-            Browse Notebooks
-          </RouterLink>
-        </div>
-      </div>
-    </div>
-
-    <div class="features-section">
-      <h2 class="features-title">Why Use Our Notebook Platform?</h2>
-
-      <div class="features-grid">
-        <div class="feature-card">
-          <div class="feature-icon">
-            <i class="fas fa-sync-alt"></i>
+        <div class="features-grid">
+          <div class="feature-card">
+            <div class="feature-icon">
+              <i class="fas fa-code"></i>
+            </div>
+            <h3>R Script Editor</h3>
+            <p>
+              Write and execute R code in your browser. Split-pane view
+              shows code and HTML output side-by-side.
+            </p>
           </div>
-          <h3>Automatic Reproducibility</h3>
-          <p>
-            R4R integration automatically captures all dependencies, system libraries,
-            and package versions needed to reproduce your results.
-          </p>
-        </div>
 
-        <div class="feature-card">
-          <div class="feature-icon">
-            <i class="fas fa-code"></i>
+          <div class="feature-card">
+            <div class="feature-icon">
+              <i class="fas fa-microscope"></i>
+            </div>
+            <h3>Static Analysis</h3>
+            <p>
+              Automatic checks for hardcoded paths, missing random seeds,
+              and other reproducibility issues before you share.
+            </p>
           </div>
-          <h3>Interactive Editor</h3>
-          <p>
-            Modern block-based editor with syntax highlighting for R code and
-            markdown support for rich documentation.
-          </p>
-        </div>
 
-        <div class="feature-card">
-          <div class="feature-icon">
-            <i class="fas fa-chart-line"></i>
+          <div class="feature-card">
+            <div class="feature-icon">
+              <i class="fas fa-robot"></i>
+            </div>
+            <h3>R4R Dependency Tracking</h3>
+            <p>
+              System-level tracing captures all packages, versions, and libraries.
+              Validated on 120+ Kaggle notebooks.
+            </p>
           </div>
-          <h3>Live Execution</h3>
-          <p>
-            Execute R code blocks directly in your browser and see results instantly
-            with support for plots and visualizations.
-          </p>
-        </div>
 
-        <div class="feature-card">
-          <div class="feature-icon">
-            <i class="fas fa-share-nodes"></i>
+          <div class="feature-card">
+            <div class="feature-icon">
+              <i class="fas fa-code-compare"></i>
+            </div>
+            <h3>RDiff Validation</h3>
+            <p>
+              Semantic diff compares local vs container outputs.
+              Verifies your code produces identical results.
+            </p>
           </div>
-          <h3>Easy Sharing</h3>
-          <p>
-            Export to R Markdown, PDF, HTML, or generate complete Docker environments
-            for seamless collaboration.
-          </p>
-        </div>
 
-        <div class="feature-card">
-          <div class="feature-icon">
-            <i class="fas fa-shield-alt"></i>
+          <div class="feature-card">
+            <div class="feature-icon">
+              <i class="fab fa-docker"></i>
+            </div>
+            <h3>Docker Export</h3>
+            <p>
+              One-click generation of Dockerfile, Makefile, and manifest.
+              Download complete package as ZIP.
+            </p>
           </div>
-          <h3>Best Practices</h3>
-          <p>
-            Real-time analysis checks for reproducibility issues like missing random
-            seeds, hardcoded paths, and external dependencies.
-          </p>
+
+          <div class="feature-card">
+            <div class="feature-icon">
+              <i class="fas fa-download"></i>
+            </div>
+            <h3>R Markdown Export</h3>
+            <p>
+              Export to .Rmd format for use with RStudio, knitr,
+              or other R Markdown tools.
+            </p>
+          </div>
         </div>
 
-        <div class="feature-card">
-          <div class="feature-icon">
-            <i class="fab fa-docker"></i>
-          </div>
-          <h3>Docker Ready</h3>
+        <div class="tech-note">
           <p>
-            Automatically generate Docker containers with complete execution environments
-            for maximum portability and reproducibility.
+            <strong>Powered by research from CTU Prague:</strong>
+            R4R for dependency detection, RDiff for semantic validation,
+            and custom static analysis.
+            <a href="https://r-tooling.github.io/" target="_blank">Learn more about R4R →</a>
           </p>
         </div>
       </div>
-    </div>
+    </section>
 
-    <div class="cta-section">
-      <h2>Ready to get started?</h2>
-      <p>Create your first reproducible R notebook in seconds</p>
-      <RouterLink to="/notebook/new" class="btn btn-primary btn-lg">
-        <i class="fas fa-rocket"></i>
-        Start Creating
-      </RouterLink>
-    </div>
+    <!-- How It Works -->
+    <section class="how-it-works">
+      <div class="container">
+        <h2>Your Workflow</h2>
+
+        <div class="workflow-steps">
+          <div class="workflow-step">
+            <div class="step-number">1</div>
+            <div class="step-content">
+              <h3>Write R Code</h3>
+              <p>Use the web editor to write your analysis script</p>
+            </div>
+          </div>
+
+          <div class="workflow-arrow">→</div>
+
+          <div class="workflow-step">
+            <div class="step-number">2</div>
+            <div class="step-content">
+              <h3>Run & Check</h3>
+              <p>Execute code and review static analysis warnings</p>
+            </div>
+          </div>
+
+          <div class="workflow-arrow">→</div>
+
+          <div class="workflow-step">
+            <div class="step-number">3</div>
+            <div class="step-content">
+              <h3>Generate Package</h3>
+              <p>Create Docker environment with R4R</p>
+            </div>
+          </div>
+
+          <div class="workflow-arrow">→</div>
+
+          <div class="workflow-step">
+            <div class="step-number">4</div>
+            <div class="step-content">
+              <h3>Validate with Diff</h3>
+              <p>Compare outputs using RDiff</p>
+            </div>
+          </div>
+
+          <div class="workflow-arrow">→</div>
+
+          <div class="workflow-step">
+            <div class="step-number">5</div>
+            <div class="step-content">
+              <h3>Download & Share</h3>
+              <p>Get ZIP with Dockerfile or .Rmd</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta">
+      <div class="container">
+        <h2>Start Creating Reproducible Notebooks</h2>
+        <p>No installation. No configuration. Just write R code.</p>
+        <RouterLink to="/notebook/new" class="btn-cta">
+          Create Your First Notebook
+          <i class="fas fa-arrow-right"></i>
+        </RouterLink>
+      </div>
+    </section>
   </div>
 </template>
 
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
 </script>
-
-<style scoped>
-.home-container {
-  min-height: calc(100vh - 70px);
-}
-
-.hero-section {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: var(--space-12) var(--space-6);
-  text-align: center;
-}
-
-.hero-content {
-  max-width: 800px;
-  margin: 0 auto;
-}
-
-.hero-title {
-  font-size: 3rem;
-  font-weight: 700;
-  margin-bottom: var(--space-4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-4);
-}
-
-.hero-description {
-  font-size: 1.25rem;
-  margin-bottom: var(--space-8);
-  opacity: 0.95;
-}
-
-.hero-actions {
-  display: flex;
-  gap: var(--space-4);
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
-.btn-lg {
-  padding: var(--space-4) var(--space-6);
-  font-size: 1rem;
-}
-
-.features-section {
-  padding: var(--space-12) var(--space-6);
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-.features-title {
-  text-align: center;
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--color-gray-800);
-  margin-bottom: var(--space-10);
-}
-
-.features-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: var(--space-6);
-}
-
-.feature-card {
-  background: white;
-  padding: var(--space-6);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.feature-card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-lg);
-}
-
-.feature-icon {
-  width: 60px;
-  height: 60px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: var(--radius-lg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-size: 1.5rem;
-  margin-bottom: var(--space-4);
-}
-
-.feature-card h3 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--color-gray-800);
-  margin-bottom: var(--space-2);
-}
-
-.feature-card p {
-  color: var(--color-gray-600);
-  line-height: 1.6;
-}
-
-.cta-section {
-  background: var(--color-gray-100);
-  padding: var(--space-12) var(--space-6);
-  text-align: center;
-}
-
-.cta-section h2 {
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--color-gray-800);
-  margin-bottom: var(--space-2);
-}
-
-.cta-section p {
-  font-size: 1.125rem;
-  color: var(--color-gray-600);
-  margin-bottom: var(--space-6);
-}
-
-@media (max-width: 768px) {
-  .hero-title {
-    font-size: 2rem;
-  }
-
-  .hero-description {
-    font-size: 1rem;
-  }
-
-  .features-grid {
-    grid-template-columns: 1fr;
-  }
-}
-</style>

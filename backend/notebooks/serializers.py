@@ -1,194 +1,345 @@
+"""
+REST Framework serializers for transforming models to/from JSON.
+"""
+
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Notebook, NotebookBlock, NotebookExecution, ReproducibilityAnalysis
+from .models import Notebook, ReproducibilityAnalysis, Execution
 
 
 class UserSerializer(serializers.ModelSerializer):
+    """
+    Serializer for User model with password handling.
+
+    Attributes:
+        password: Write-only field for password (min 8 characters).
+        notebook_count: Computed field showing user's notebook count.
+    """
+
+    password = serializers.CharField(
+        write_only=True,
+        required=True,
+        min_length=8,
+        style={"input_type": "password"},
+        help_text="Password must be at least 8 characters",
+    )
+    notebook_count = serializers.SerializerMethodField(read_only=True)
+
     class Meta:
         model = User
-        fields = ["id", "username", "email", "first_name", "last_name"]
-        read_only_fields = ["id"]
-
-
-class NotebookBlockSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = NotebookBlock
         fields = [
             "id",
-            "block_type",
-            "content",
-            "order",
-            "output",
-            "error_output",
-            "execution_status",
-            "execution_time",
-            "created_at",
-            "updated_at",
+            "username",
+            "email",
+            "first_name",
+            "last_name",
+            "password",
+            "notebook_count",
+            "date_joined",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = ["id", "date_joined"]
 
+    def get_notebook_count(self, obj):
+        """
+        Get number of notebooks created by user.
 
-class NotebookListSerializer(serializers.ModelSerializer):
-    """Lightweight serializer for listing notebooks"""
+        Args:
+            obj: User instance.
 
-    author = serializers.StringRelatedField(read_only=True)
-    block_count = serializers.SerializerMethodField()
+        Returns:
+            int: Count of notebooks.
+        """
+        return obj.notebooks.count()
 
-    class Meta:
-        model = Notebook
-        fields = [
-            "id",
-            "title",
-            "author",
-            "description",
-            "is_public",
-            "block_count",
-            "created_at",
-            "updated_at",
-        ]
-        read_only_fields = ["id", "author", "created_at", "updated_at"]
+    def validate_username(self, value):
+        """
+        Validate username contains only allowed characters.
 
-    def get_block_count(self, obj):
-        return obj.blocks.count()
+        Args:
+            value: Username string to validate.
 
+        Returns:
+            str: Validated username.
 
-class NotebookDetailSerializer(serializers.ModelSerializer):
-    """Full serializer with blocks"""
+        Raises:
+            ValidationError: If username contains invalid characters.
+        """
+        if not value.replace("_", "").replace("-", "").isalnum():
+            raise serializers.ValidationError(
+                "Username must contain only letters, numbers, hyphens and underscores"
+            )
+        return value
 
-    blocks = NotebookBlockSerializer(many=True, read_only=True)
-    author = serializers.StringRelatedField(read_only=True)
+    def validate_email(self, value):
+        """
+        Validate email is unique across all users.
 
-    class Meta:
-        model = Notebook
-        fields = [
-            "id",
-            "title",
-            "author",
-            "description",
-            "blocks",
-            "is_public",
-            "created_at",
-            "updated_at",
-        ]
-        read_only_fields = ["id", "author", "created_at", "updated_at"]
+        Args:
+            value: Email address to validate.
+
+        Returns:
+            str: Validated email.
+
+        Raises:
+            ValidationError: If email is already in use.
+        """
+        if self.instance and self.instance.email == value:
+            return value
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("Email is already in use")
+        return value
 
     def create(self, validated_data):
-        # Get user from request context
-        request = self.context.get("request")
-        user = None
+        """
+        Create user with hashed password.
 
-        if request and hasattr(request, "user"):
-            if request.user.is_authenticated:
-                user = request.user
+        Args:
+            validated_data: Dictionary of validated user data.
 
-        # If no authenticated user, use the first user (for development)
-        if not user:
-            from django.contrib.auth.models import User
-
-            user = User.objects.first()
-
-            # If no users exist at all, create one
-            if not user:
-                user = User.objects.create_user(
-                    username="default_user",
-                    email="default@example.com",
-                    password="default123",
-                )
-
-        validated_data["author"] = user
-        return super().create(validated_data)
-
-
-class NotebookExecutionSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = NotebookExecution
-        fields = [
-            "id",
-            "notebook",
-            "status",
-            "started_at",
-            "completed_at",
-            "total_blocks",
-            "completed_blocks",
-            "failed_blocks",
-            "error_log",
-        ]
-        read_only_fields = ["id", "started_at"]
+        Returns:
+            User: Created user instance.
+        """
+        user = User.objects.create_user(
+            username=validated_data["username"],
+            email=validated_data.get("email", ""),
+            password=validated_data["password"],
+            first_name=validated_data.get("first_name", ""),
+            last_name=validated_data.get("last_name", ""),
+        )
+        return user
 
 
 class ReproducibilityAnalysisSerializer(serializers.ModelSerializer):
-    checks = serializers.SerializerMethodField()
+    """
+    Serializer for ReproducibilityAnalysis model.
+
+    Attributes:
+        notebook_title: Read-only field showing notebook title.
+    """
+
+    notebook_title = serializers.CharField(source="notebook.title", read_only=True)
 
     class Meta:
         model = ReproducibilityAnalysis
         fields = [
             "id",
             "notebook",
-            "has_random_seed",
-            "has_hardcoded_paths",
-            "has_external_deps",
-            "has_time_deps",
-            "has_interactive_input",
-            "r4r_dependencies",
-            "r4r_system_packages",
-            "r4r_docker_ready",
-            "r4r_reproducibility_score",
-            "checks",
+            "notebook_title",
+            "dependencies",
+            "system_deps",
+            "dockerfile",
+            "makefile",
+            "diff_html",
             "created_at",
             "updated_at",
+            "r4r_data",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
-    def get_checks(self, obj):
-        """Format checks for frontend display"""
-        checks = []
 
-        checks.append(
-            {
-                "name": "Random Seed",
-                "status": "ok" if obj.has_random_seed else "warning",
-                "message": (
-                    "Random seed is set"
-                    if obj.has_random_seed
-                    else "No random seed detected"
-                ),
-            }
-        )
+class ExecutionSerializer(serializers.ModelSerializer):
+    """
+    Serializer for Execution model.
 
-        checks.append(
-            {
-                "name": "Hardcoded Paths",
-                "status": "warning" if obj.has_hardcoded_paths else "ok",
-                "message": (
-                    "Hardcoded paths detected"
-                    if obj.has_hardcoded_paths
-                    else "No hardcoded paths"
-                ),
-            }
-        )
+    Attributes:
+        notebook_title: Read-only field showing notebook title.
+        duration_seconds: Computed field showing execution duration.
+    """
 
-        checks.append(
-            {
-                "name": "External Dependencies",
-                "status": "warning" if obj.has_external_deps else "ok",
-                "message": (
-                    "External dependencies detected"
-                    if obj.has_external_deps
-                    else "No external dependencies"
-                ),
-            }
-        )
+    notebook_title = serializers.CharField(source="notebook.title", read_only=True)
+    duration_seconds = serializers.SerializerMethodField(read_only=True)
 
-        checks.append(
-            {
-                "name": "Time Dependencies",
-                "status": "warning" if obj.has_time_deps else "ok",
-                "message": (
-                    "Time-dependent code detected"
-                    if obj.has_time_deps
-                    else "No time dependencies"
-                ),
-            }
-        )
+    class Meta:
+        model = Execution
+        fields = [
+            "id",
+            "notebook",
+            "notebook_title",
+            "status",
+            "html_output",
+            "error_message",
+            "duration_seconds",
+            "started_at",
+            "completed_at",
+        ]
+        read_only_fields = ["id", "started_at"]
 
-        return checks
+    def get_duration_seconds(self, obj):
+        """
+        Calculate execution duration.
+
+        Args:
+            obj: Execution instance.
+
+        Returns:
+            float: Duration in seconds, or None if not completed.
+        """
+        return obj.duration
+
+
+class NotebookSerializer(serializers.ModelSerializer):
+    """
+    Full serializer for Notebook model.
+
+    Attributes:
+        author: Read-only username field.
+        author_id: Read-only user ID field.
+        analysis: Nested analysis data.
+        execution_count: Computed total executions.
+        last_execution_status: Computed status of most recent execution.
+        has_analysis: Computed boolean for analysis existence.
+    """
+
+    author = serializers.ReadOnlyField(source="author.username")
+    author_id = serializers.ReadOnlyField(source="author.id")
+    analysis = ReproducibilityAnalysisSerializer(read_only=True)
+    execution_count = serializers.SerializerMethodField(read_only=True)
+    last_execution_status = serializers.SerializerMethodField(read_only=True)
+    has_analysis = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = Notebook
+        fields = [
+            "id",
+            "title",
+            "author",
+            "author_id",
+            "content",
+            "created_at",
+            "updated_at",
+            "is_public",
+            "analysis",
+            "execution_count",
+            "last_execution_status",
+            "has_analysis",
+        ]
+        read_only_fields = [
+            "id",
+            "author",
+            "author_id",
+            "created_at",
+            "updated_at",
+            "analysis",
+        ]
+
+    def get_execution_count(self, obj):
+        """
+        Get total number of executions.
+
+        Args:
+            obj: Notebook instance.
+
+        Returns:
+            int: Count of executions.
+        """
+        return obj.executions.count()
+
+    def get_last_execution_status(self, obj):
+        """
+        Get status of most recent execution.
+
+        Args:
+            obj: Notebook instance.
+
+        Returns:
+            str: Status string, or None if never executed.
+        """
+        last_execution = obj.executions.first()
+        return last_execution.status if last_execution else None
+
+    def get_has_analysis(self, obj):
+        """
+        Check if analysis exists.
+
+        Args:
+            obj: Notebook instance.
+
+        Returns:
+            bool: True if analysis exists.
+        """
+        return hasattr(obj, "analysis")
+
+    def validate_title(self, value):
+        """
+        Validate title is not empty.
+
+        Args:
+            value: Title string to validate.
+
+        Returns:
+            str: Stripped title.
+
+        Raises:
+            ValidationError: If title is empty or whitespace only.
+        """
+        if not value.strip():
+            raise serializers.ValidationError("Title cannot be empty")
+        return value.strip()
+
+    def validate_content(self, value):
+        """
+        Validate content looks like R markdown.
+
+        Args:
+            value: Content string to validate.
+
+        Returns:
+            str: Original content unchanged.
+        """
+        if value and len(value) > 10:
+            r_indicators = ["```{r", "library(", "require("]
+            if not any(indicator in value for indicator in r_indicators):
+                pass  # Soft validation
+        return value
+
+
+class NotebookListSerializer(serializers.ModelSerializer):
+    """
+    Lightweight serializer for notebook lists (excludes content).
+
+    Attributes:
+        author: Read-only username field.
+        execution_count: Computed total executions.
+        has_analysis: Computed boolean for analysis existence.
+    """
+
+    author = serializers.ReadOnlyField(source="author.username")
+    execution_count = serializers.SerializerMethodField(read_only=True)
+    has_analysis = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = Notebook
+        fields = [
+            "id",
+            "title",
+            "author",
+            "created_at",
+            "updated_at",
+            "is_public",
+            "execution_count",
+            "has_analysis",
+        ]
+
+    def get_execution_count(self, obj):
+        """
+        Get total executions count.
+
+        Args:
+            obj: Notebook instance.
+
+        Returns:
+            int: Count of executions.
+        """
+        return obj.executions.count()
+
+    def get_has_analysis(self, obj):
+        """
+        Check if analysis exists.
+
+        Args:
+            obj: Notebook instance.
+
+        Returns:
+            bool: True if analysis exists.
+        """
+        return hasattr(obj, "analysis")
