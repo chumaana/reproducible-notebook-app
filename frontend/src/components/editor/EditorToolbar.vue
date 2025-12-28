@@ -28,6 +28,11 @@
             <i class="fas fa-chart-bar"></i> Analysis
         </button>
 
+        <button @click="$emit('downloadRmd')" class="btn btn-outline" title="Download .Rmd file">
+            <i class="fas fa-download"></i>
+            .Rmd
+        </button>
+
         <button v-if="canDownload" @click="$emit('download')" class="btn btn-outline" :disabled="isDownloading">
             <i class="fas" :class="isDownloading ? 'fa-spinner fa-spin' : 'fa-download'"></i>
             Download ZIP
@@ -37,15 +42,15 @@
 
 <script setup lang="ts">
 defineProps<{
-    isExecuting: boolean;
-    isGenerating: boolean;
-    isDiffing: boolean;
-    isDownloading: boolean;
-    hasExecuted: boolean;
-    hasPackage: boolean;
-    canDiff: boolean;
-    canDownload: boolean;
-}>();
+    isExecuting: boolean
+    isGenerating: boolean
+    isDiffing: boolean
+    isDownloading: boolean
+    hasExecuted: boolean
+    hasPackage: boolean
+    canDiff: boolean
+    canDownload: boolean
+}>()
 
-defineEmits(['save', 'run', 'generate', 'diff', 'toggleAnalysis', 'download']);
+defineEmits(['save', 'run', 'generate', 'diff', 'toggleAnalysis', 'downloadRmd', 'download'])
 </script>
