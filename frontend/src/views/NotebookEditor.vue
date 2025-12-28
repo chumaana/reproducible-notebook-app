@@ -9,17 +9,24 @@
                 </button>
 
                 <button @click="executeNotebook" class="btn btn-success" :disabled="executing">
-                    <i class="fas fa-play"></i> {{ executing ? 'Running...' : 'Run' }}
+                    <i class="fas" :class="executing ? 'fa-spinner fa-spin' : 'fa-play'"></i>
+                    {{ executing ? 'Running...' : 'Run' }}
                 </button>
 
-                <button @click="generatePackage" class="btn btn-primary" :disabled="packageGenerating || !hasExecuted"
-                    :title="!hasExecuted ? 'Run notebook first' : 'Generate reproducibility package'">
+                <button v-if="!canDownloadPackage" @click="generatePackage" class="btn btn-primary"
+                    :disabled="packageGenerating || !hasExecuted"
+                    :title="!hasExecuted ? 'Run notebook first' : 'Content changed! Generate new package.'">
                     <i class="fas" :class="packageGenerating ? 'fa-spinner fa-spin' : 'fa-box'"></i>
-                    {{ packageGenerating ? 'Building...' : 'Package' }}
+                    {{ packageGenerating ? 'Building...' : 'Generate Package' }}
                 </button>
 
-                <button @click="generateDiff" class="btn btn-secondary" :disabled="diffGenerating || !hasPackage"
-                    :title="!hasPackage ? 'Generate package first' : 'Compare local vs container'">
+                <button v-if="hasPackage && canDownloadPackage" @click="generatePackage" class="btn btn-primary"
+                    title="Force Re-build Package">
+                    <i class="fas fa-sync-alt" :class="{ 'fa-spin': packageGenerating }"></i>
+                </button>
+
+                <button @click="generateDiff" class="btn btn-secondary" :disabled="diffGenerating || !canGenerateDiff"
+                    :title="!canGenerateDiff ? 'Wait for Local Run and Package Generation' : 'Compare local vs container'">
                     <i class="fas" :class="diffGenerating ? 'fa-spinner fa-spin' : 'fa-code-compare'"></i>
                     {{ diffGenerating ? 'Comparing...' : 'Diff' }}
                 </button>
@@ -32,10 +39,10 @@
                     <i class="fas fa-download"></i> .Rmd
                 </button>
 
-                <button @click="downloadPackage" class="btn btn-outline" :disabled="!hasPackage || packageLoading"
-                    :title="!hasPackage ? 'Generate package first' : 'Download ZIP'">
+                <button v-if="canDownloadPackage" @click="downloadPackage" class="btn btn-outline"
+                    :disabled="packageLoading">
                     <i class="fas" :class="packageLoading ? 'fa-spinner fa-spin' : 'fa-download'"></i>
-                    {{ packageLoading ? 'Downloading...' : 'Download' }}
+                    {{ packageLoading ? 'Downloading...' : 'Download ZIP' }}
                 </button>
             </div>
         </div>
@@ -49,6 +56,7 @@
                             style="cursor: pointer;">
                             <i class="fas fa-exclamation-triangle"></i> {{ adjustedIssues.length }} warnings
                         </span>
+
                     </div>
                 </div>
 
@@ -94,13 +102,6 @@
                         <summary>Show Full System Log (Debug)</summary>
                         <pre ref="errorPre" class="error-details">{{ executionError }}</pre>
                     </details>
-
-                    <div v-if="adjustedIssues.length > 0" class="error-actions">
-                        <p>The analyzer detected potential issues with your code:</p>
-                        <button @click="showAnalysis = true" class="btn btn-sm btn-outline">
-                            <i class="fas fa-search"></i> View Analysis Report ({{ adjustedIssues.length }} issues)
-                        </button>
-                    </div>
                 </div>
 
                 <div v-else-if="executionResult" class="output-content">
@@ -135,44 +136,20 @@
                                 </div>
                                 <p class="issue-details">{{ issue.details }}</p>
                                 <p class="issue-fix">💡 {{ issue.fix }}</p>
-                                <span class="issue-count">
-                                    Line(s): {{issue.lines.map((l: any) => l.line_number).join(', ')}}
-                                </span>
+                                <span class="issue-count">Line(s): {{issue.lines.map((l: any) =>
+                                    l.line_number).join(',')}}</span>
                             </div>
                         </div>
                     </div>
 
                     <div v-if="adjustedIssues.length > 0" class="section">
-                        <h4><i class="fas fa-code"></i> Your Code</h4>
+                        <h4><i class="fas fa-code"></i> Code Context</h4>
                         <CodeHighlighter :code="cleanContent" :issues="adjustedIssues" />
                     </div>
 
                     <div v-if="adjustedIssues.length === 0 && staticAnalysis" class="section">
                         <div class="success-banner">
-                            <i class="fas fa-check-circle"></i>
-                            <span>No reproducibility issues detected!</span>
-                        </div>
-                    </div>
-
-                    <div v-if="analysis && (analysis.detected_packages || []).length > 0" class="section">
-                        <h4><i class="fas fa-cube"></i> R Packages ({{ analysis.detected_packages.length }})</h4>
-                        <div class="package-tags">
-                            <span v-for="pkg in (analysis.detected_packages || [])" :key="pkg" class="package-tag">
-                                {{ pkg }}
-                            </span>
-                        </div>
-                    </div>
-
-                    <div v-if="analysis && analysis.manifest && analysis.manifest.system_packages" class="section">
-                        <h4><i class="fas fa-server"></i> System Dependencies</h4>
-                        <div class="sys-deps">
-                            <span v-for="dep in analysis.manifest.system_packages.slice(0, 8)" :key="dep"
-                                class="sys-dep-tag">
-                                {{ dep }}
-                            </span>
-                            <span v-if="analysis.manifest.system_packages.length > 8" class="more-deps">
-                                +{{ analysis.manifest.system_packages.length - 8 }} more
-                            </span>
+                            <i class="fas fa-check-circle"></i> <span>No reproducibility issues detected!</span>
                         </div>
                     </div>
 
@@ -183,11 +160,13 @@
                         </button>
 
                         <button @click="downloadPackageFromModal" class="btn btn-sm btn-primary"
-                            :disabled="!hasPackage || packageLoading">
+                            :disabled="packageLoading">
                             <i class="fas" :class="packageLoading ? 'fa-spinner fa-spin' : 'fa-download'"></i>
                             {{ packageLoading ? 'Downloading...' : 'Download Reproducibility Package' }}
                         </button>
                     </div>
+
+
                 </div>
             </div>
         </Transition>
@@ -196,15 +175,13 @@
             <div v-if="showDiffModal" class="modal-overlay" @click="showDiffModal = false">
                 <div class="diff-modal" @click.stop>
                     <div class="diff-modal-header">
-                        <h3><i class="fas fa-code-compare"></i> Semantic Diff (Local vs Container)</h3>
-                        <button @click="showDiffModal = false" class="modal-close-btn">
-                            <i class="fas fa-times"></i>
-                        </button>
+                        <h3><i class="fas fa-code-compare"></i> Semantic Diff</h3>
+                        <button @click="showDiffModal = false" class="modal-close-btn"><i
+                                class="fas fa-times"></i></button>
                     </div>
                     <div class="diff-modal-body">
                         <iframe v-if="diffResult" :srcdoc="diffResult" class="diff-iframe"></iframe>
-                        <div v-else class="diff-empty">
-                            <i clasContainers="fas fa-spinner fa-spin"></i>
+                        <div v-else class="diff-empty"><i class="fas fa-spinner fa-spin"></i>
                             <p>Loading diff...</p>
                         </div>
                     </div>
@@ -213,59 +190,63 @@
         </Transition>
     </div>
 </template>
-
-
 <script setup lang="ts">
 import { ref, onMounted, watch, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import api from '@/services/api'
+import { storeToRefs } from 'pinia'
+import { useNotebookStore } from '@/stores/notebookStore' // Adjust path if needed
 import CodeHighlighter from '@/components/CodeHighlighter.vue'
 
+// --- 1. Setup Store & Route ---
 const route = useRoute()
+const store = useNotebookStore()
 
-const notebook = ref<any>({
-    title: 'Untitled Notebook',
-    content: ''
-})
+// We use storeToRefs to keep reactivity for state properties
+const {
+    notebook,
+    analysis,
+    staticAnalysis,
+    warnings,            // Combined list of issues from store
+    executing,
+    packageGenerating,
+    diffGenerating,
+    packageLoading,
+    executionResult,
+    executionError,
+    diffResult,
+    hasExecuted,
+    hasPackage,
+    canGenerateDiff,
+    canDownloadPackage,  // Logic handled in store
+    isPackageUpToDate    // Logic handled in store
+} = storeToRefs(store)
 
+// --- 2. Local UI State ---
 const notebookTitle = ref('Untitled Notebook')
 const cleanContent = ref('')
-const warnings = ref<any[]>([])
-
-const executing = ref(false)
-const executionResult = ref<string | null>(null)
-const executionError = ref<string | null>(null)
-
-const analysis = ref<any>(null)
-const staticAnalysis = ref<any>(null)
 const showAnalysis = ref(false)
-const packageLoading = ref(false)
+const showDiffModal = ref(false)
+const editorTextarea = ref<HTMLTextAreaElement | null>(null)
 
+// Resizing logic vars
 let resizeStartX = 0
 let resizeStartWidth = 0
 let isResizing = false
-const hasExecuted = ref(false)
-const hasPackage = ref(false)
-const packageGenerating = ref(false)
-const diffGenerating = ref(false)
-const diffResult = ref<string>('')
-const showDiffModal = ref(false)
 
+// --- 3. Computed UI Helpers ---
+
+// Format the error message for the UI
 const parsedError = computed(() => {
-    if (!executionError.value) return null;
-    const errorMatch = executionError.value.match(/(Error in[\s\S]+?Execution halted)|(Error:[\s\S]+)|(! cannot open[\s\S]+)/);
+    if (!executionError.value) return null
+    const errorMatch = executionError.value.match(/(Error in[\s\S]+?Execution halted)|(Error:[\s\S]+)|(! cannot open[\s\S]+)/)
     if (errorMatch) {
-        return errorMatch[0].trim();
+        return errorMatch[0].trim()
     }
-    const lines = executionError.value.split('\n');
-    return lines.slice(-10).join('\n');
-});
-
-const isPackageReady = computed(() => {
-    if (!analysis.value) return false
-    return !!(analysis.value.manifest || analysis.value.dockerfile)
+    const lines = executionError.value.split('\n')
+    return lines.slice(-10).join('\n')
 })
 
+// Calculate line offsets for mapping errors to the editor
 const shouldAutoWrap = computed(() => {
     return !cleanContent.value.includes('```{r}')
 })
@@ -281,16 +262,29 @@ output: html_document
     return (yaml.split('\n').length - 1) + wrapperOffset
 })
 
+// Map store warnings to specific lines in the local editor
 const adjustedIssues = computed(() => {
-    if (!staticAnalysis.value || !staticAnalysis.value.issues) return []
+    const rawIssues = warnings.value || []
+    if (rawIssues.length === 0) return []
 
-    return staticAnalysis.value.issues.map((issue: any) => ({
-        ...issue,
-        lines: issue.lines.map((line: any) => ({
-            ...line,
-            line_number: Math.max(1, line.line_number - totalOffset.value)
-        })).filter((l: any) => l.line_number > 0)
-    }))
+    return rawIssues.map((issue: any) => {
+        let linesData = []
+
+        if (issue.lines && Array.isArray(issue.lines)) {
+            linesData = issue.lines.map((l: any) => ({
+                line_number: Math.max(1, l.line_number - totalOffset.value),
+                code: l.content || ''
+            })).filter((l: any) => l.line_number > 0)
+        } else {
+            // Default to line 1 if no specific line provided
+            linesData = [{ line_number: 1, code: 'Global Issue' }]
+        }
+
+        return {
+            ...issue,
+            lines: linesData
+        }
+    })
 })
 
 const placeholderText = `# Write your R code here
@@ -303,6 +297,8 @@ ggplot(data, aes(x=wt, y=mpg)) +
   geom_point() +
   geom_smooth(method='lm')
 `
+
+// --- 4. Content Processing ---
 
 const extractCleanContent = (content: string): string => {
     if (!content) return ''
@@ -331,219 +327,95 @@ output: html_document
     return header + cleanContent.value
 }
 
-watch(
-    () => notebook.value.content,
-    (newContent) => {
-        if (newContent) {
-            cleanContent.value = extractCleanContent(newContent)
+// --- 5. Watchers & Lifecycle ---
+
+// Watch for store data load to update local inputs
+watch(() => notebook.value, (newVal) => {
+    if (newVal) {
+        if (newVal.title) notebookTitle.value = newVal.title
+        // Only update content if it differs significantly to prevent cursor jumping
+        const extracted = extractCleanContent(newVal.content)
+        if (extracted !== cleanContent.value) {
+            cleanContent.value = extracted
         }
     }
-)
+}, { deep: true })
 
+// Watch local content to update store state
+watch(cleanContent, (newVal) => {
+    notebook.value.content = generateFullRmd()
+})
+
+// Watch local title to update store state
 watch(notebookTitle, () => {
     notebook.value.title = notebookTitle.value
 })
 
-const loadNotebook = async () => {
+onMounted(async () => {
     const id = route.params.id as string
+
     if (id && id !== 'new') {
-        try {
-            const data = await api.getNotebook(id)
-            notebook.value = data
-            notebookTitle.value = data.title
-            cleanContent.value = extractCleanContent(data.content)
-            await loadAnalysis()
-        } catch (error) {
-            console.error('Failed to load notebook:', error)
-        }
+        // Case A: Editing an existing notebook
+        await store.load(id)
+    } else {
+        // Case B: Creating a new notebook
+        // We MUST reset the store to clear previous results/analysis
+        store.resetState()
+
+        // Reset local UI state
+        notebookTitle.value = 'Untitled Notebook'
+        cleanContent.value = ''
     }
-}
+
+    // Sync local refs with whatever is now in the store
+    // (This handles both cases: ensuring title is correct for existing, 
+    // or empty for new)
+    notebookTitle.value = notebook.value.title
+    cleanContent.value = extractCleanContent(notebook.value.content)
+})
+
+// --- 6. Actions (Mapped to Store) ---
 
 const updateTitle = async () => {
-    notebook.value.title = notebookTitle.value
-    await saveNotebook()
+    await store.save()
 }
 
-const saveNotebook = async () => {
-    notebook.value.content = generateFullRmd()
-
-    try {
-        if (notebook.value.id) {
-            await api.updateNotebook(notebook.value.id, notebook.value)
-        } else {
-            const created = await api.createNotebook(notebook.value)
-            notebook.value = created
-            notebookTitle.value = created.title
-        }
-    } catch (error) {
-        console.error('Save failed:', error)
-    }
-}
-
+// Debounce save to prevent API flooding
 const debouncedSave = debounce(() => {
-    saveNotebook()
+    store.save()
 }, 2000)
 
-const executeNotebook = async () => {
-    if (!notebook.value.id) {
-        await saveNotebook()
-    }
+const saveNotebook = () => store.save()
 
-    executing.value = true
-    executionResult.value = null
-    executionError.value = null
-    diffResult.value = ''
-    warnings.value = []
+const executeNotebook = () => store.runLocal()
 
-    try {
-        const result = await api.executeNotebook(notebook.value.id)
+// Logic for generating package handled by store
+const generatePackage = () => store.runPackage()
 
-        if (result.static_analysis) {
-            staticAnalysis.value = result.static_analysis
-            warnings.value = result.static_analysis.issues || []
-        }
+// Logic for downloading package handled by store
+const downloadPackage = () => store.downloadPackage()
 
-        if (result.success === false) {
-            executionError.value = result.error || 'Execution failed'
-            hasExecuted.value = false
-            return
-        }
-
-        executionResult.value = result.html
-        hasExecuted.value = true
-
-    } catch (error: any) {
-        console.error('Execution failed:', error)
-        hasExecuted.value = false
-
-        if (error.response && error.response.data) {
-            executionError.value = error.response.data.error || JSON.stringify(error.response.data)
-
-            if (error.response.data.static_analysis) {
-                staticAnalysis.value = error.response.data.static_analysis
-                warnings.value = error.response.data.static_analysis.issues || []
-            }
-        } else {
-            executionError.value = `Network Error: ${error.message}`
-        }
-    } finally {
-        executing.value = false
-    }
-}
-const generatePackage = async () => {
-    if (!notebook.value.id) return
-
-    packageGenerating.value = true
-    executionError.value = null
-
-    try {
-        const result = await api.generatePackage(notebook.value.id)
-
-        if (result.success) {
-            hasPackage.value = true
-            analysis.value = {
-                ...analysis.value,
-                dockerfile: result.dockerfile,
-                makefile: result.makefile,
-                manifest: result.manifest,
-            }
-            alert('Reproducibility package generated successfully!')
-        } else {
-            executionError.value = result.error
-            alert(`Failed to generate package: ${result.error}`)
-        }
-    } catch (error: any) {
-        console.error('Package generation failed:', error)
-        executionError.value = error.response?.data?.error || error.message
-        alert('Failed to generate package. Check console for details.')
-    } finally {
-        packageGenerating.value = false
-    }
-}
-
+// Wrapper for modal download button
+const downloadPackageFromModal = () => store.downloadPackage()
 
 const generateDiff = async () => {
-    if (!notebook.value.id) return
-
-    diffGenerating.value = true
-    executionError.value = null
-
-    try {
-        const result = await api.generateDiff(notebook.value.id)
-
-        if (result.success) {
-            diffResult.value = result.diff_html
-            showAnalysis.value = true
-        } else {
-            executionError.value = result.error
-            alert(`Failed to generate diff: ${result.error}`)
-        }
-    } catch (error: any) {
-        console.error('Diff generation failed:', error)
-        executionError.value = error.response?.data?.error || error.message
-        alert('Failed to generate diff. Check console for details.')
-    } finally {
-        diffGenerating.value = false
+    await store.runDiff()
+    if (diffResult.value) {
+        showDiffModal.value = true
     }
 }
 
-const loadAnalysis = async () => {
-    if (!notebook.value.id) return
-    try {
-        const data = await api.getReproducibilityAnalysis(notebook.value.id)
-        analysis.value = data
-
-        if (data.static_analysis) {
-            staticAnalysis.value = data.static_analysis
-            warnings.value = data.static_analysis.issues || []
-        }
-
-    } catch (error) {
-        console.error('Failed to load analysis:', error)
-    }
-}
-
-const toggleAnalysis = async () => {
-    if (!analysis.value && !staticAnalysis.value) {
-        await loadAnalysis()
-    }
+const toggleAnalysis = () => {
     showAnalysis.value = !showAnalysis.value
 }
 
+// Purely client-side .Rmd download
 const downloadRmd = () => {
     const fullContent = generateFullRmd()
     downloadFile(fullContent, `${notebookTitle.value}.Rmd`, 'text/plain')
 }
-const downloadPackage = async () => {
-    if (!notebook.value.id || packageLoading.value || !hasPackage.value) return
 
-
-    packageLoading.value = true
-
-    try {
-        const blob = await api.downloadPackage(notebook.value.id)
-
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `notebook_${notebook.value.id}_package.zip`
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        URL.revokeObjectURL(url)
-
-    } catch (error) {
-        console.error('Download failed:', error)
-        alert('Failed to download package.')
-    } finally {
-        setTimeout(() => {
-            packageLoading.value = false
-        }, 1000)
-    }
-}
-
-const downloadPackageFromModal = downloadPackage
-
+// Helper to download string content
 const downloadFile = (content: string, filename: string, type: string) => {
     const blob = new Blob([content], { type })
     const url = URL.createObjectURL(blob)
@@ -554,21 +426,27 @@ const downloadFile = (content: string, filename: string, type: string) => {
     URL.revokeObjectURL(url)
 }
 
+// --- 7. Resizing Logic ---
+
 const startResize = (e: MouseEvent) => {
     isResizing = true
     resizeStartX = e.clientX
     const editorPane = document.querySelector('.editor-pane') as HTMLElement
-    resizeStartWidth = editorPane.offsetWidth
-    document.addEventListener('mousemove', onMouseMove)
-    document.addEventListener('mouseup', stopResize)
+    if (editorPane) {
+        resizeStartWidth = editorPane.offsetWidth
+        document.addEventListener('mousemove', onMouseMove)
+        document.addEventListener('mouseup', stopResize)
+    }
 }
 
 const onMouseMove = (e: MouseEvent) => {
     if (!isResizing) return
     const editorPane = document.querySelector('.editor-pane') as HTMLElement
-    const newWidth = resizeStartWidth + (e.clientX - resizeStartX)
-    if (newWidth > 200 && newWidth < window.innerWidth - 200) {
-        editorPane.style.flex = `0 0 ${newWidth}px`
+    if (editorPane) {
+        const newWidth = resizeStartWidth + (e.clientX - resizeStartX)
+        if (newWidth > 200 && newWidth < window.innerWidth - 200) {
+            editorPane.style.flex = `0 0 ${newWidth}px`
+        }
     }
 }
 
@@ -578,6 +456,7 @@ const stopResize = () => {
     document.removeEventListener('mouseup', stopResize)
 }
 
+// Utility
 function debounce<T extends (...args: any[]) => any>(fn: T, delay: number) {
     let timeout: any
     return (...args: Parameters<T>) => {
@@ -585,8 +464,4 @@ function debounce<T extends (...args: any[]) => any>(fn: T, delay: number) {
         timeout = setTimeout(() => fn(...args), delay)
     }
 }
-
-onMounted(() => {
-    loadNotebook()
-})
 </script>

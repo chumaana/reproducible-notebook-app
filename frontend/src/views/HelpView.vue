@@ -60,38 +60,83 @@
           <h3>Toolbar Buttons</h3>
           <div class="button-grid">
             <div class="button-demo">
-              <button class="btn btn-primary"><i class="fas fa-save"></i> Save</button>
-              <p>Saves your notebook (auto-saves every 2 seconds)</p>
+              <button class="btn btn-primary no-click">
+                <i class="fas fa-save"></i> Save
+              </button>
+              <div class="desc">
+                <strong>Save</strong>
+                <p>Saves your current work.</p>
+              </div>
             </div>
 
             <div class="button-demo">
-              <button class="btn btn-success"><i class="fas fa-play"></i> Run</button>
-              <p>Executes R code and displays output. Also runs static analysis.</p>
+              <button class="btn btn-success no-click">
+                <i class="fas fa-play"></i> Run
+              </button>
+              <div class="desc">
+                <strong>Run</strong>
+                <p>Executes the R code and generates the HTML preview.</p>
+              </div>
             </div>
 
             <div class="button-demo">
-              <button class="btn btn-primary"><i class="fas fa-box"></i> Package</button>
-              <p>Generates Docker package with R4R (must run code first)</p>
+              <button class="btn btn-primary no-click">
+                <i class="fas fa-box"></i> Generate Package
+              </button>
+              <div class="desc">
+                <strong>Generate Package</strong>
+                <p>Builds the Docker container. (Appears if no package exists or content changed).</p>
+              </div>
             </div>
 
             <div class="button-demo">
-              <button class="btn btn-secondary"><i class="fas fa-code-compare"></i> Diff</button>
-              <p>Compares local vs container output using RDiff</p>
+              <button class="btn btn-primary no-click">
+                <i class="fas fa-sync-alt"></i>
+              </button>
+              <div class="desc">
+                <strong>Force Re-build</strong>
+                <p>Forces the package to regenerate/update (Visible when a package already exists).</p>
+              </div>
             </div>
 
             <div class="button-demo">
-              <button class="btn btn-outline"><i class="fas fa-chart-bar"></i> Analysis</button>
-              <p>Shows reproducibility analysis panel</p>
+              <button class="btn btn-secondary no-click">
+                <i class="fas fa-code-compare"></i> Diff
+              </button>
+              <div class="desc">
+                <strong>Diff</strong>
+                <p>Runs the container and compares the output against your local run.</p>
+              </div>
             </div>
 
             <div class="button-demo">
-              <button class="btn btn-outline"><i class="fas fa-download"></i> .Rmd</button>
-              <p>Downloads as R Markdown file</p>
+              <button class="btn btn-outline no-click">
+                <i class="fas fa-chart-bar"></i> Analysis
+              </button>
+              <div class="desc">
+                <strong>Analysis</strong>
+                <p>Opens the sidebar to show dependency details and static analysis warnings.</p>
+              </div>
             </div>
 
             <div class="button-demo">
-              <button class="btn btn-outline"><i class="fas fa-download"></i> Download</button>
-              <p>Downloads Docker package ZIP</p>
+              <button class="btn btn-outline no-click">
+                <i class="fas fa-download"></i> .Rmd
+              </button>
+              <div class="desc">
+                <strong>Download Source</strong>
+                <p>Downloads the raw R Markdown file.</p>
+              </div>
+            </div>
+
+            <div class="button-demo">
+              <button class="btn btn-outline no-click">
+                <i class="fas fa-download"></i> Download ZIP
+              </button>
+              <div class="desc">
+                <strong>Download Package</strong>
+                <p>Downloads the full reproducible package (Dockerfile + Code + Manifest).</p>
+              </div>
             </div>
           </div>
         </div>

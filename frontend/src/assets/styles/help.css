@@ -164,7 +164,10 @@
 }
 
 .button-demo {
+  align-items: center;
   text-align: center;
+  display: flex;
+  flex-direction: column;
 }
 
 .button-demo button {
