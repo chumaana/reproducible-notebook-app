@@ -27,7 +27,7 @@ This application enables researchers and data scientists to write R Markdown not
 
 ### Prerequisites
 
-- Docker 20.10+ and Docker Compose
+- Docker 20.10+ and Docker Compose  5.0.0+
 - 4GB RAM (8GB recommended)
 - 5GB free disk space
 
@@ -48,11 +48,11 @@ Create `.env` file inside backed directory:
 cat > backend/.env << EOF
 DEBUG=True
 SECRET_KEY=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 50)
-DATABASE_NAME=notebooks
-DATABASE_USER=postgres
-DATABASE_PASSWORD=postgres
-DATABASE_HOST=db
-DATABASE_PORT=5432
+DB_NAME=notebooks
+DB_USER=postgres
+DB_PASSWORD=postgres
+DB_HOST=db
+DB_PORT=5432
 ALLOWED_HOSTS=localhost,127.0.0.1
 EOF
 ```
@@ -60,10 +60,10 @@ EOF
 **3. Start application**
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
-⏱️ First build takes 5-10 minutes (installs R, Python packages, compiles r4r/rdiff tools).
+First build takes 5-10 minutes (installs R, Python packages, compiles r4r/rdiff tools).
 
 **4. Access application**
 
@@ -81,10 +81,10 @@ docker-compose exec backend python manage.py createsuperuser
 
 ```bash
 # Press Ctrl+C, then:
-docker-compose down
+docker compose down
 
 # Remove all data (clean slate):
-docker-compose down -v
+docker compose down -v
 ```
 
 ---
@@ -193,7 +193,7 @@ The database is **automatically configured** when running `docker-compose up`:
 - PostgreSQL 15 container starts with health checks
 - Database `notebooks` is created on first run
 - Django migrations execute via `entrypoint.sh`
-- **No manual setup required** ✅
+- **No manual setup required** 
 
 ### Verify Database
 
