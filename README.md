@@ -74,7 +74,7 @@ First build takes 5-10 minutes (installs R, Python packages, compiles r4r/rdiff 
 **5. Create admin account** _(optional)_
 
 ```bash
-docker-compose exec backend python manage.py createsuperuser
+docker compose exec backend python manage.py createsuperuser
 ```
 
 **6. Stop application**
@@ -188,7 +188,7 @@ ggplot(data, aes(x, y)) +
 
 ### Automatic (Docker)
 
-The database is **automatically configured** when running `docker-compose up`:
+The database is **automatically configured** when running `docker compose up`:
 
 - PostgreSQL 15 container starts with health checks
 - Database `notebooks` is created on first run
@@ -199,12 +199,12 @@ The database is **automatically configured** when running `docker-compose up`:
 
 ```bash
 # Check database logs
-docker-compose logs db
+docker compose logs db
 
 # Should see: "database system is ready to accept connections"
 
 # Access PostgreSQL shell
-docker-compose exec db psql -U postgres -d notebooks
+docker compose exec db psql -U postgres -d notebooks
 
 # List tables
 \dt
