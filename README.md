@@ -45,9 +45,9 @@ cd reproducible-notebook-app
 Create `.env` file inside backed directory:
 
 ```bash
-cat > .env << 'EOF'
+cat > backend/.env << EOF
 DEBUG=True
-SECRET_KEY=$(python3 -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())')
+SECRET_KEY=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 50)
 DATABASE_NAME=notebooks
 DATABASE_USER=postgres
 DATABASE_PASSWORD=postgres
