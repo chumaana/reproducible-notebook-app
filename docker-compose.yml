@@ -7,7 +7,7 @@ services:
       - ./backend:/app
       - storage_volume:/app/storage
       - /var/run/docker.sock:/var/run/docker.sock
-    env_file: .env
+    env_file: backend/.env
     
     cap_add:
       - SYS_PTRACE

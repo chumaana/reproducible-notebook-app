@@ -71,7 +71,7 @@ docker-compose up --build
 - **Backend API:** [http://localhost:8000/api/](http://localhost:8000/api/)
 - **Admin Panel:** [http://localhost:8000/admin](http://localhost:8000/admin)
 
-**5. Create admin account** *(optional)*
+**5. Create admin account** _(optional)_
 
 ```bash
 docker-compose exec backend python manage.py createsuperuser
@@ -146,39 +146,39 @@ ggplot(data, aes(x, y)) +
 
 ### Authentication
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/auth/register/` | Register new user (username, email, password) |
-| `POST` | `/api/auth/login/` | Login and receive auth token |
-| `GET` | `/api/auth/profile/` | Get current user profile |
-| `PATCH` | `/api/auth/profile/` | Update user profile |
+| Method  | Endpoint              | Description                                   |
+| ------- | --------------------- | --------------------------------------------- |
+| `POST`  | `/api/auth/register/` | Register new user (username, email, password) |
+| `POST`  | `/api/auth/login/`    | Login and receive auth token                  |
+| `GET`   | `/api/auth/profile/`  | Get current user profile                      |
+| `PATCH` | `/api/auth/profile/`  | Update user profile                           |
 
 ### Notebooks
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/notebooks/` | List user's notebooks |
-| `POST` | `/api/notebooks/` | Create new notebook |
-| `GET` | `/api/notebooks/{id}/` | Get notebook details |
-| `PATCH` | `/api/notebooks/{id}/` | Update notebook (partial) |
-| `DELETE` | `/api/notebooks/{id}/` | Delete notebook |
+| Method   | Endpoint               | Description               |
+| -------- | ---------------------- | ------------------------- |
+| `GET`    | `/api/notebooks/`      | List user's notebooks     |
+| `POST`   | `/api/notebooks/`      | Create new notebook       |
+| `GET`    | `/api/notebooks/{id}/` | Get notebook details      |
+| `PATCH`  | `/api/notebooks/{id}/` | Update notebook (partial) |
+| `DELETE` | `/api/notebooks/{id}/` | Delete notebook           |
 
 ### Execution & Analysis
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/notebooks/{id}/execute/` | Execute R Markdown notebook |
-| `POST` | `/api/notebooks/{id}/generate_package/` | Generate reproducibility package |
-| `POST` | `/api/notebooks/{id}/generate_diff/` | Generate semantic diff |
-| `GET` | `/api/notebooks/{id}/executions/` | Get execution history |
-| `GET` | `/api/notebooks/{id}/reproducibility/` | Get analysis data (r4r, static issues) |
+| Method | Endpoint                                | Description                            |
+| ------ | --------------------------------------- | -------------------------------------- |
+| `POST` | `/api/notebooks/{id}/execute/`          | Execute R Markdown notebook            |
+| `POST` | `/api/notebooks/{id}/generate_package/` | Generate reproducibility package       |
+| `POST` | `/api/notebooks/{id}/generate_diff/`    | Generate semantic diff                 |
+| `GET`  | `/api/notebooks/{id}/executions/`       | Get execution history                  |
+| `GET`  | `/api/notebooks/{id}/reproducibility/`  | Get analysis data (r4r, static issues) |
 
 ### Downloads
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/notebooks/{id}/download/` | Download `.Rmd` file |
-| `GET` | `/api/notebooks/{id}/download_package/` | Download ZIP package (Dockerfile + deps) |
+| Method | Endpoint                                | Description                              |
+| ------ | --------------------------------------- | ---------------------------------------- |
+| `GET`  | `/api/notebooks/{id}/download/`         | Download `.Rmd` file                     |
+| `GET`  | `/api/notebooks/{id}/download_package/` | Download ZIP package (Dockerfile + deps) |
 
 **Authentication:** All notebook endpoints require `Authorization: Token <token>` header.
 
