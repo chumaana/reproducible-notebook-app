@@ -36,43 +36,27 @@ class UserRegisterView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        username = request.data.get("username")
-        email = request.data.get("email")
-        password = request.data.get("password")
+        # Pass data to the serializer to handle validation
+        serializer = UserSerializer(data=request.data)
 
-        if not username or not email or not password:
+        if serializer.is_valid():
+            user = serializer.save()
+            token, _ = Token.objects.get_or_create(user=user)
+
             return Response(
-                {"error": "Please provide username, email and password"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if User.objects.filter(username=username).exists():
-            return Response(
-                {"error": "Username already exists"}, status=status.HTTP_400_BAD_REQUEST
-            )
-
-        if User.objects.filter(email=email).exists():
-            return Response(
-                {"error": "Email already exists"}, status=status.HTTP_400_BAD_REQUEST
-            )
-
-        user = User.objects.create_user(
-            username=username, email=email, password=password
-        )
-
-        token, _ = Token.objects.get_or_create(user=user)
-
-        return Response(
-            {
-                "token": token.key,
-                "user": {
-                    "id": user.id,
-                    "username": user.username,
-                    "email": user.email,
+                {
+                    "token": token.key,
+                    "user": {
+                        "id": user.id,
+                        "username": user.username,
+                        "email": user.email,
+                    },
                 },
-            },
-            status=status.HTTP_201_CREATED,
-        )
+                status=status.HTTP_201_CREATED,
+            )
+
+        # If password is weak or username exists, this returns the specific error
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class UserLoginView(APIView):
