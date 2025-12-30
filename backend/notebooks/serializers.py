@@ -221,6 +221,10 @@ class NotebookSerializer(serializers.ModelSerializer):
             "updated_at",
             "analysis",
         ]
+        extra_kwargs = {
+            "title": {"required": True, "allow_blank": False},
+            "content": {"required": True, "allow_blank": False},
+        }
 
     def get_execution_count(self, obj):
         """

@@ -84,7 +84,6 @@ class R4RExecutor(BaseExecutor):
                 cmd=r4r_cmd,
                 cwd=temp_dir,
                 env=env,
-                timeout=600,
                 desc="r4r Trace & Build",
             )
 

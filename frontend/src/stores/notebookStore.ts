@@ -15,6 +15,7 @@ export const useNotebookStore = defineStore('notebook', () => {
     title: 'Untitled Notebook',
     content: '',
     author: '',
+    is_public: false,
   })
 
   const executing = ref(false)
@@ -48,6 +49,7 @@ export const useNotebookStore = defineStore('notebook', () => {
       title: 'Untitled Notebook',
       content: '',
       author: '',
+      is_public: false,
     }
     executionResult.value = null
     executionError.value = null
@@ -70,8 +72,10 @@ export const useNotebookStore = defineStore('notebook', () => {
     executionError.value = null
 
     try {
+      // Load notebook data
       notebook.value = await api.getNotebook(id)
 
+      // Load analysis data if available
       if (notebook.value.analysis) {
         analysis.value = notebook.value.analysis
 
@@ -90,14 +94,32 @@ export const useNotebookStore = defineStore('notebook', () => {
         }
       }
 
+      // Load execution history (optional, non-blocking)
       try {
         const executions = await api.getExecutions(Number(id))
-        const lastExec = executions[0]
-        if (lastExec && lastExec.status === 'completed') {
-          executionResult.value = lastExec.html_output
+
+        if (executions && executions.length > 0) {
+          const lastExec = executions[0]
+          if (lastExec && lastExec.status === 'completed') {
+            executionResult.value = lastExec.html_output
+            console.log(`Loaded execution result for notebook ${id}`)
+          } else {
+            console.log(`No completed executions found for notebook ${id}`)
+          }
+        } else {
+          console.log(`No execution history for notebook ${id}`)
         }
       } catch (e) {
-        console.warn('Execution history unavailable:', getErrorMessage(e))
+        const errorMsg = getErrorMessage(e)
+        // Only log as warning since execution history is optional
+        console.warn('Execution history unavailable:', errorMsg)
+
+        // Check if it's an authentication error for a public notebook
+        if (errorMsg.includes('Authentication') && notebook.value.is_public) {
+          console.error(
+            'BUG: Public notebook should not require authentication for execution history',
+          )
+        }
       }
     } catch (err: unknown) {
       const errorMsg = getErrorMessage(err)
@@ -106,21 +128,29 @@ export const useNotebookStore = defineStore('notebook', () => {
       throw err
     }
   }
-
+  /**
+   * Save notebook with title, content, and visibility status.
+   *
+   * @returns Notebook ID
+   */
   async function save(): Promise<number | undefined> {
     saveError.value = null
 
     try {
       if (notebook.value.id) {
+        // Update existing notebook
         await api.updateNotebook(notebook.value.id, {
           title: notebook.value.title,
           content: notebook.value.content,
+          is_public: notebook.value.is_public,
         })
         return notebook.value.id
       } else {
+        // Create new notebook
         const newNb = await api.createNotebook({
           title: notebook.value.title,
           content: notebook.value.content,
+          is_public: notebook.value.is_public,
         })
         notebook.value.id = newNb.id
         return newNb.id
@@ -231,6 +261,9 @@ export const useNotebookStore = defineStore('notebook', () => {
     }
   }
 
+  /**
+   * Download reproducibility package as ZIP file
+   */
   async function downloadPackage(): Promise<void> {
     if (!notebook.value.id) {
       console.error('Cannot download: notebook not saved')
@@ -249,6 +282,9 @@ export const useNotebookStore = defineStore('notebook', () => {
     }
   }
 
+  /**
+   * Clear all error messages
+   */
   function clearErrors(): void {
     executionError.value = null
     saveError.value = null

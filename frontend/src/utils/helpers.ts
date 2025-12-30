@@ -8,44 +8,85 @@ import axios from 'axios'
  * @returns A formatted error message string
  */
 export function getErrorMessage(err: unknown): string {
-  // Handle Axios API errors
   if (axios.isAxiosError(err)) {
     const data = err.response?.data
 
-    // Simple string response
     if (typeof data === 'string') {
       return data
     }
 
     if (data && typeof data === 'object') {
-      // Django REST framework 'detail' field
       if ('detail' in data && typeof data.detail === 'string') {
         return data.detail
       }
 
-      // Generic 'error' field
       if ('error' in data && typeof data.error === 'string') {
         return data.error
       }
 
-      // Field-level validation errors (e.g., form validation)
+      if ('title' in data) {
+        const msg = Array.isArray(data.title) ? data.title[0] : data.title
+        return `Title: ${msg}`
+      }
+
+      if ('content' in data) {
+        const msg = Array.isArray(data.content) ? data.content[0] : data.content
+        return `Content: ${msg}`
+      }
+
+      if ('is_public' in data) {
+        const msg = Array.isArray(data.is_public) ? data.is_public[0] : data.is_public
+        return `Visibility: ${msg}`
+      }
+
+      if ('username' in data) {
+        const msg = Array.isArray(data.username) ? data.username[0] : data.username
+        return `Username: ${msg}`
+      }
+
+      if ('email' in data) {
+        const msg = Array.isArray(data.email) ? data.email[0] : data.email
+        return `Email: ${msg}`
+      }
+
+      if ('password' in data) {
+        const msg = Array.isArray(data.password) ? data.password[0] : data.password
+        return `Password: ${msg}`
+      }
+
+      if ('non_field_errors' in data) {
+        const msg = Array.isArray(data.non_field_errors)
+          ? data.non_field_errors[0]
+          : data.non_field_errors
+        return String(msg)
+      }
+
       const errors = Object.entries(data)
+        .filter(([key]) => key !== 'detail' && key !== 'error')
         .map(([field, messages]) => {
-          const messageArray = Array.isArray(messages) ? messages : [messages]
-          return `${field}: ${messageArray.join(', ')}`
+          if (Array.isArray(messages)) {
+            return `${field}: ${messages.join(', ')}`
+          }
+          return `${field}: ${String(messages)}`
         })
-        .join('; ')
-      if (errors) return errors
+        .filter(Boolean)
+
+      if (errors.length > 0) {
+        return errors.join('; ')
+      }
     }
+
+    if (err.response?.statusText) {
+      return `${err.response.status}: ${err.response.statusText}`
+    }
+
     return err.message
   }
 
-  // Handle standard JavaScript errors
   if (err instanceof Error) {
     return err.message
   }
 
-  // Fallback for unknown error types
   return String(err)
 }
 
@@ -96,7 +137,6 @@ export function formatDateTime(dateString?: string): string {
 /**
  * Creates a debounced function that delays execution until after
  * the specified delay has elapsed since the last call.
- * Useful for search inputs, auto-save, and other rapid events.
  *
  * @param fn - The function to debounce
  * @param delay - Delay in milliseconds
@@ -138,7 +178,6 @@ export function generateId(): string {
 
 /**
  * Downloads text content as a file to the user's device.
- * Used for exporting notebooks, R scripts, etc.
  *
  * @param content - The text content to download
  * @param filename - The name for the downloaded file

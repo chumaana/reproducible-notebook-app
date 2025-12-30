@@ -39,18 +39,6 @@ export interface Notebook {
 
 // ==================== EXECUTION ====================
 
-export interface Execution {
-  id: number
-  notebook: number
-  notebook_title?: string
-  status: 'pending' | 'running' | 'completed' | 'failed'
-  html_output: string
-  error_message?: string
-  duration_seconds?: number | null
-  started_at: string
-  completed_at?: string | null
-}
-
 export interface ExecutionResponse {
   success: boolean
   html?: string

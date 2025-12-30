@@ -32,7 +32,7 @@ class Notebook(models.Model):
         related_name="notebooks",
         help_text="User who created this notebook",
     )
-    content = models.TextField(blank=True, default="", help_text="R Markdown content")
+    content = models.TextField(default="", help_text="R Markdown content")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_public = models.BooleanField(

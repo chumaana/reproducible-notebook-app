@@ -8,7 +8,7 @@
         </div>
 
         <div class="modal-body-bottom">
-            <div v-if="props.r4rData" class="section">
+            <div v-if="hasR4RData" class="section">
                 <h4><i class="fab fa-docker"></i> Environment Metrics</h4>
 
                 <div class="metrics-grid">
@@ -102,7 +102,8 @@
                     <i class="fas fa-code-compare"></i> View Semantic Diff
                 </button>
 
-                <button @click="$emit('download')" class="btn btn-sm btn-primary" :disabled="packageLoading">
+                <button @click="$emit('download')" class="btn btn-sm btn-primary"
+                    :disabled="packageLoading || isReadOnly">
                     <i class="fas" :class="packageLoading ? 'fa-spinner fa-spin' : 'fa-download'"></i>
                     {{ packageLoading ? 'Downloading...' : 'Download Reproducibility Package' }}
                 </button>
@@ -117,7 +118,7 @@
  * Shows R4R environment metrics, detected issues, and code context with issue highlighting.
  */
 
-import { ref, computed } from 'vue'
+import { ref, computed, watchEffect } from 'vue'
 import CodeHighlighter from '@/components/common/CodeHighlighter.vue'
 import type { StaticAnalysisIssue, R4RData } from '@/types/index'
 
@@ -133,6 +134,7 @@ const props = defineProps<{
     packageLoading: boolean
     hasStaticAnalysis: boolean
     r4rData?: R4RData | null
+    isReadOnly?: boolean
 }>()
 
 defineEmits<{
@@ -140,7 +142,11 @@ defineEmits<{
     openDiff: []
     download: []
 }>()
-
+watchEffect(() => {
+    console.log('r4rData prop:', props.r4rData)
+    console.log('r4rData type:', typeof props.r4rData)
+    console.log('r4rData is array:', Array.isArray(props.r4rData))
+})
 const showAllPackages = ref(false)
 const showAllSysLibs = ref(false)
 
@@ -155,6 +161,12 @@ const visiblePackages = computed(() =>
 const visibleSysLibs = computed(() =>
     showAllSysLibs.value ? sysLibs.value : sysLibs.value.slice(0, 5)
 )
+
+const hasR4RData = computed(() => {
+    if (!props.r4rData || typeof props.r4rData !== 'object') return false
+    return Object.keys(props.r4rData).length > 0
+})
+
 
 /**
  * Formats issue line numbers for display.

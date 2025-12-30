@@ -1,11 +1,40 @@
 <template>
-    <div class="notebook-editor">
+    <div class="notebook-editor" :class="{ 'read-only-mode': isReadOnly }">
+        <!-- Read-only banner -->
+        <div v-if="isReadOnly" class="read-only-banner">
+            <i class="fas fa-eye"></i>
+            <span>Viewing public notebook by <strong>{{ notebook.author }}</strong></span>
+            <span class="separator">•</span>
+            <span>Read-only mode</span>
+        </div>
+
         <div class="editor-header">
-            <input v-model="notebookTitle" @blur="handleSave" class="notebook-title" placeholder="Untitled Notebook">
+            <div class="title-section">
+                <input v-model="notebookTitle" @blur="handleSave" class="notebook-title" placeholder="Untitled Notebook"
+                    :disabled="isReadOnly" :class="{ 'read-only': isReadOnly }">
+
+                <!-- Only show toggle for owners -->
+                <label v-if="!isReadOnly" class="public-toggle">
+                    <input type="checkbox" v-model="isPublic" @change="handlePublicToggle">
+                    <span class="toggle-label">
+                        <i class="fas" :class="isPublic ? 'fa-globe' : 'fa-lock'"></i>
+                        {{ isPublic ? 'Public' : 'Private' }}
+                    </span>
+                    <span class="info-icon" title="Public: Anyone can view with link | Private: Only you can access">
+                        <i class="fas fa-info-circle"></i>
+                    </span>
+                </label>
+
+                <!-- Show public badge for viewers -->
+                <span v-else class="public-badge">
+                    <i class="fas fa-globe"></i> Public
+                </span>
+            </div>
 
             <EditorToolbar :is-executing="executing" :is-generating="packageGenerating" :is-diffing="diffGenerating"
                 :is-downloading="packageLoading" :has-executed="hasExecuted" :has-package="hasPackage"
-                :can-diff="canGenerateDiff" :can-download="canDownloadPackage" @save="handleSave" @run="store.runLocal"
+                :can-diff="canGenerateDiff" :can-download="canDownloadPackage" :is-public="isPublic"
+                :is-read-only="isReadOnly" :notebook-id="notebook.id" @save="handleSave" @run="store.runLocal"
                 @generate="store.runPackage" @diff="handleDiff" @toggleAnalysis="showAnalysis = true"
                 @downloadRmd="downloadRmd" @download="store.downloadPackage" />
         </div>
@@ -24,7 +53,8 @@
                 </div>
 
                 <textarea ref="editorTextarea" v-model="cleanContent" @input="debouncedSave" class="rmarkdown-editor"
-                    :placeholder="placeholderText" :class="{ 'has-warnings': warnings.length > 0 }"></textarea>
+                    :placeholder="placeholderText" :class="{ 'has-warnings': warnings.length > 0 }"
+                    :readonly="isReadOnly" :disabled="isReadOnly"></textarea>
             </div>
 
             <div class="resize-handle" @mousedown="startResize"></div>
@@ -37,8 +67,8 @@
         <Transition name="slide-up">
             <AnalysisDrawer v-if="showAnalysis && (analysis || staticAnalysis)" :issues="adjustedIssues"
                 :code="cleanContent" :diff-result="diffResult" :package-loading="packageLoading" :r4r-data="r4rData"
-                :has-static-analysis="!!staticAnalysis" @close="showAnalysis = false" @openDiff="showDiffModal = true"
-                @download="store.downloadPackage" />
+                :has-static-analysis="!!staticAnalysis" :is-read-only="isReadOnly" @close="showAnalysis = false"
+                @openDiff="showDiffModal = true" @download="store.downloadPackage" />
         </Transition>
 
         <Transition name="fade">
@@ -53,7 +83,8 @@
 /**
  * Main notebook editor component.
  * Provides split-pane editor with R code input, execution output, analysis drawer, and diff visualization.
- * Handles auto-save, R Markdown conversion, and resizable panes.
+ * Handles auto-save, R Markdown conversion, resizable panes, public/private visibility toggle, and sharing.
+ * Supports read-only mode for viewing public notebooks owned by others.
  */
 
 import { ref, watch, onMounted, computed } from 'vue'
@@ -92,12 +123,22 @@ const {
 
 const notebookTitle = ref('Untitled Notebook')
 const cleanContent = ref('')
+const isPublic = ref(false)
 const showAnalysis = ref(false)
 const showDiffModal = ref(false)
 const paneWidth = ref(600)
 const placeholderText = `# Write your R code here...`
 
+
 const { extractCleanContent, generateFullRmd } = useMarkdown(notebookTitle, cleanContent)
+
+/**
+ * Check if current notebook is read-only (public notebook not owned by current user)
+ */
+const isReadOnly = computed(() => {
+    const currentUser = JSON.parse(localStorage.getItem('user') || '{}')
+    return notebook.value.is_public && notebook.value.author !== currentUser.username
+})
 
 onMounted(async () => {
     const id = route.params.id as string
@@ -109,20 +150,53 @@ onMounted(async () => {
 
     notebookTitle.value = store.notebook.title || 'Untitled Notebook'
     cleanContent.value = extractCleanContent(store.notebook.content)
+    isPublic.value = store.notebook.is_public || false
 })
 
-// Sync local state with store when content or title changes
+// Sync local state with store when content or title changes (only for owners)
 watch([cleanContent, notebookTitle], () => {
-    store.notebook.content = generateFullRmd()
-    store.notebook.title = notebookTitle.value
+    if (!isReadOnly.value) {
+        store.notebook.content = generateFullRmd()
+        store.notebook.title = notebookTitle.value
+    }
 })
+
+/**
+ * Handles public/private toggle change with confirmation.
+ * Updates store and immediately saves.
+ */
+const handlePublicToggle = async () => {
+    if (isReadOnly.value) return
+
+    if (isPublic.value && !store.notebook.is_public) {
+        const confirmed = confirm(
+            ' Make this notebook public?\n\n' +
+            '• Anyone with the link can view it\n' +
+            '• It may be discoverable by others\n' +
+            '• Do not include sensitive data\n\n' +
+            'Continue?'
+        )
+        if (!confirmed) {
+            isPublic.value = false
+            return
+        }
+    }
+
+    store.notebook.is_public = isPublic.value
+    await handleSave()
+}
 
 const handleSave = async () => {
+    if (isReadOnly.value) return
     await store.save()
 }
 
-// Auto-save after 2 seconds of inactivity
-const debouncedSave = debounce(() => handleSave(), 2000)
+// Auto-save after 2 seconds of inactivity (only for owners)
+const debouncedSave = debounce(() => {
+    if (!isReadOnly.value) {
+        handleSave()
+    }
+}, 2000)
 
 const handleDiff = async () => {
     await store.runDiff()
@@ -170,13 +244,13 @@ const startResize = (e: MouseEvent) => {
  * 
  * @param fn - Function to debounce
  * @param delay - Delay in milliseconds
- * @returns Debounced function
+ * @returns Debounced   
  */
 function debounce<T extends (...args: unknown[]) => unknown>(
     fn: T,
     delay: number
 ): (...args: Parameters<T>) => void {
-    let timeout: ReturnType<typeof setTimeout>
+    let timeout: number | undefined
     return (...args: Parameters<T>) => {
         clearTimeout(timeout)
         timeout = setTimeout(() => fn(...args), delay)

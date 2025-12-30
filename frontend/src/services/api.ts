@@ -5,7 +5,6 @@ import type {
   PackageResponse,
   DiffResponse,
   AnalysisData,
-  Execution,
 } from '@/types/index'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
@@ -31,9 +30,6 @@ class ApiService {
     this.initializeToken()
   }
 
-  /**
-   * Configure request/response interceptors for authentication and error handling
-   */
   private setupInterceptors(): void {
     this.api.interceptors.request.use(
       (config) => {
@@ -52,7 +48,11 @@ class ApiService {
         if (error.response?.status === 401) {
           localStorage.removeItem('token')
           localStorage.removeItem('user')
-          if (window.location.pathname !== '/login') {
+
+          const currentPath = window.location.pathname
+          const isNotebookPath = currentPath.startsWith('/notebook/')
+
+          if (!isNotebookPath && currentPath !== '/login') {
             window.location.href = '/login'
           }
         }
@@ -89,6 +89,15 @@ class ApiService {
     return response.data
   }
 
+  async logout() {
+    try {
+      await this.api.post('/auth/logout/')
+    } finally {
+      this.clearToken()
+      localStorage.removeItem('user')
+    }
+  }
+
   async getUserProfile() {
     const response = await this.api.get('/auth/profile/')
     return response.data
@@ -103,6 +112,26 @@ class ApiService {
   async getNotebooks(): Promise<Notebook[]> {
     const response = await this.api.get('/notebooks/')
     return response.data
+  }
+
+  /**
+   * Get all public notebooks (no authentication required)
+   * The backend automatically returns only public notebooks for unauthenticated users,
+   * and returns user's notebooks + public notebooks for authenticated users.
+   * @returns Array of accessible notebooks
+   */
+  async getPublicNotebooks(): Promise<Notebook[]> {
+    const token = this.api.defaults.headers.common['Authorization']
+    delete this.api.defaults.headers.common['Authorization']
+
+    try {
+      const response = await this.api.get('/notebooks/')
+      return response.data
+    } finally {
+      if (token) {
+        this.api.defaults.headers.common['Authorization'] = token
+      }
+    }
   }
 
   async getNotebook(id: string | number): Promise<Notebook> {
@@ -122,6 +151,16 @@ class ApiService {
 
   async deleteNotebook(id: number): Promise<void> {
     await this.api.delete(`/notebooks/${id}/`)
+  }
+
+  /**
+   * Toggle public/private status of a notebook
+   * @param id Notebook ID
+   * @returns Object with is_public status and message
+   */
+  async togglePublic(id: number): Promise<{ is_public: boolean; message: string }> {
+    const response = await this.api.post(`/notebooks/${id}/toggle_public/`)
+    return response.data
   }
 
   // Execution
@@ -171,7 +210,32 @@ class ApiService {
     window.URL.revokeObjectURL(url)
   }
 
-  async getExecutions(id: number): Promise<Execution[]> {
+  /**
+   * Download notebook as .Rmd file
+   */
+  async downloadNotebook(id: number | string): Promise<void> {
+    const response = await this.api.get(`/notebooks/${id}/download/`, {
+      responseType: 'blob',
+    })
+
+    const url = window.URL.createObjectURL(new Blob([response.data]))
+    const link = document.createElement('a')
+    link.href = url
+
+    const contentDisposition = response.headers['content-disposition']
+    const filename = contentDisposition
+      ? contentDisposition.split('filename=')[1]?.replace(/"/g, '')
+      : `notebook_${id}.Rmd`
+
+    link.setAttribute('download', filename)
+    document.body.appendChild(link)
+    link.click()
+
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  }
+
+  async getExecutions(id: number) {
     const response = await this.api.get(`/notebooks/${id}/executions/`)
     return response.data
   }

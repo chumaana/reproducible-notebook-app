@@ -7,6 +7,7 @@ from rest_framework.authtoken.views import obtain_auth_token
 from notebooks.views import (
     NotebookViewSet,
     UserLoginView,
+    UserLogoutView,
     UserProfileView,
     UserViewSet,
     ExecutionViewSet,
@@ -17,7 +18,6 @@ from notebooks.views import (
 router = DefaultRouter()
 router.register(r"notebooks", NotebookViewSet, basename="notebook")
 router.register(r"users", UserViewSet, basename="user")
-router.register(r"executions", ExecutionViewSet, basename="execution")
 router.register(r"analyses", ReproducibilityAnalysisViewSet, basename="analysis")
 
 urlpatterns = [
@@ -27,4 +27,5 @@ urlpatterns = [
     path("api/", include(router.urls)),
     path("api-auth/", include("rest_framework.urls")),
     path("api/auth/profile/", UserProfileView.as_view(), name="user-profile"),
+    path("api/auth/logout/", UserLogoutView.as_view(), name="logout"),
 ]

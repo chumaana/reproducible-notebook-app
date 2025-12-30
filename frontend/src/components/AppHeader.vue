@@ -19,10 +19,10 @@
                         <i class="fas fa-home"></i>
                         <span>Home</span>
                     </RouterLink>
-                    <RouterLink v-if="authStore.isAuthenticated" to="/notebooks" class="nav-link"
-                        @click="closeMobileMenu">
-                        <i class="fas fa-folder"></i>
-                        <span>Notebooks</span>
+                    <!-- Notebooks link - shows different content based on auth -->
+                    <RouterLink to="/notebooks" class="nav-link" @click="closeMobileMenu">
+                        <i class="fas" :class="authStore.isAuthenticated ? 'fa-folder' : 'fa-globe'"></i>
+                        <span>{{ authStore.isAuthenticated ? 'My Notebooks' : 'Public Notebooks' }}</span>
                     </RouterLink>
                     <RouterLink to="/help" class="nav-link" @click="closeMobileMenu">
                         <i class="fas fa-question-circle"></i>
@@ -57,6 +57,7 @@
 /**
  * Main application header with navigation and authentication controls.
  * Includes responsive mobile menu and conditional rendering based on auth state.
+ * The "Notebooks" link shows user's notebooks when logged in, or public notebooks when not logged in.
  */
 
 import { ref } from 'vue'
