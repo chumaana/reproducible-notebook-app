@@ -13,7 +13,6 @@
                 <input v-model="notebookTitle" @blur="handleSave" class="notebook-title" placeholder="Untitled Notebook"
                     :disabled="isReadOnly" :class="{ 'read-only': isReadOnly }">
 
-                <!-- Only show toggle for owners -->
                 <label v-if="!isReadOnly" class="public-toggle">
                     <input type="checkbox" v-model="isPublic" @change="handlePublicToggle">
                     <span class="toggle-label">
@@ -25,7 +24,6 @@
                     </span>
                 </label>
 
-                <!-- Show public badge for viewers -->
                 <span v-else class="public-badge">
                     <i class="fas fa-globe"></i> Public
                 </span>

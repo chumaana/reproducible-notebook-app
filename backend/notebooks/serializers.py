@@ -289,11 +289,20 @@ class NotebookSerializer(serializers.ModelSerializer):
 
         Returns:
             str: Original content unchanged.
+
+        Raises:
+            ValidationError: If content is empty or whitespace-only.
         """
+        if not value.strip():
+            raise serializers.ValidationError(
+                "Content cannot be empty or whitespace only"
+            )
+
         if value and len(value) > 10:
             r_indicators = ["```{r", "library(", "require("]
             if not any(indicator in value for indicator in r_indicators):
                 pass  # Soft validation
+
         return value
 
 

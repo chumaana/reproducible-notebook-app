@@ -57,10 +57,18 @@ class NotebookSerializerTest(TestCase):
         self.assertIn("title", serializer.errors)
 
     def test_notebook_validation_empty_content(self):
-        """Test validation allows empty content"""
+        """Test validation rejects empty content"""
         data = {"title": "Empty Notebook", "content": ""}
         serializer = NotebookSerializer(data=data)
-        self.assertTrue(serializer.is_valid())
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("content", serializer.errors)
+
+    def test_notebook_validation_whitespace_content(self):
+        """Test validation rejects whitespace-only content"""
+        data = {"title": "Whitespace Notebook", "content": "   \n\n   "}
+        serializer = NotebookSerializer(data=data)
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("content", serializer.errors)
 
     def test_notebook_update(self):
         """Test notebook update via serializer"""
