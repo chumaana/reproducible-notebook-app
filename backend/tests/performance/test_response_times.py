@@ -40,7 +40,7 @@ class AuthEndpointResponseTimeTest(TestCase):
         data = {
             "username": "newuser",
             "email": "new@test.com",
-            "password": "password123",
+            "password": "ComplexPass123!",
         }
 
         start = time.time()

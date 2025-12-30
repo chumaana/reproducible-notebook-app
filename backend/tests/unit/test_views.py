@@ -66,7 +66,8 @@ class UserViewSetTest(TestCase):
         data = {
             "username": "newuser",
             "email": "new@example.com",
-            "password": "securepass123",
+            # FIXED: Stronger password to pass validators
+            "password": "ComplexPass123!",
         }
 
         request = self.factory.post("/api/users/register/", data)
@@ -104,9 +105,10 @@ class UserAuthViewsTest(TestCase):
 
         view = UserRegisterView.as_view()
         data = {
-            "username": "newuser",
-            "email": "new@example.com",
-            "password": "password123",
+            "username": "newuser_view",
+            "email": "new_view@example.com",
+            # FIXED: Stronger password to pass validators
+            "password": "ComplexPass123!",
         }
 
         request = self.factory.post("/api/auth/register/", data)
@@ -121,6 +123,8 @@ class UserAuthViewsTest(TestCase):
         from notebooks.views import UserLoginView
 
         view = UserLoginView.as_view()
+        # Login doesn't validate complexity, just matches the DB.
+        # So "testpass123" is fine here because setUp created it.
         data = {"username": "testuser", "password": "testpass123"}
 
         request = self.factory.post("/api/auth/login/", data)
