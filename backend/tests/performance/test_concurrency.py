@@ -22,7 +22,6 @@ class BaseConcurrencyTest(TransactionTestCase):
     """
 
     def tearDown(self):
-        # Double check to close any lingering main-thread connections
         connections.close_all()
         super().tearDown()
 

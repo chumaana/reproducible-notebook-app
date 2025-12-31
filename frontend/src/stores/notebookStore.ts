@@ -68,7 +68,7 @@ export const useNotebookStore = defineStore('notebook', () => {
    * Load notebook and its analysis data
    */
   async function load(id: string): Promise<void> {
-    resetState()
+    // resetState()
     executionError.value = null
 
     try {

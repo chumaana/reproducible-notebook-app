@@ -1,9 +1,9 @@
 <template>
     <div class="editor-actions">
-        <button @click="$emit('save')" class="btn btn-primary " :disabled="isReadOnly">
+        <button id="btn-save" @click="$emit('save')" class="btn btn-primary " :disabled="isReadOnly">
             <i class="fas fa-save"></i> Save
         </button>
-        <button @click="$emit('run')" class="btn btn-success" :disabled="isReadOnly || isExecuting">
+        <button id="btn-run" @click="$emit('run')" class="btn btn-success" :disabled="isReadOnly || isExecuting">
             <i class="fas" :class="isExecuting ? 'fa-spinner fa-spin' : 'fa-play'"></i>
             {{ isExecuting ? 'Running...' : 'Run' }}
         </button>
@@ -13,7 +13,7 @@
             <i class="fas" :class="isGenerating ? 'fa-spinner fa-spin' : 'fa-box'"></i>
             {{ isGenerating ? 'Building...' : 'Generate Package' }}
         </button>
-        <button v-if="hasPackage && canDownload" @click="$emit('generate')" class="btn btn-primary"
+        <button id="btn-generate" v-if="hasPackage && canDownload" @click="$emit('generate')" class="btn btn-primary"
             :disabled="isReadOnly || isGenerating">
             <i class="fas fa-sync-alt" :class="{ 'fa-spin': isGenerating }"></i>
         </button>
@@ -25,8 +25,7 @@
             <i class="fas fa-chart-bar"></i> Analysis
         </button>
 
-        <button @click="$emit('downloadRmd')" class="btn btn-outline" title="Download .Rmd file"
-            :disabled="isReadOnly">
+        <button @click="$emit('downloadRmd')" class="btn btn-outline" title="Download .Rmd file" :disabled="isReadOnly">
             <i class="fas fa-download"></i>
             .Rmd
         </button>

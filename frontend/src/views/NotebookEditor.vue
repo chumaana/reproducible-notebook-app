@@ -11,10 +11,12 @@
         <div class="editor-header">
             <div class="title-section">
                 <input v-model="notebookTitle" @blur="handleSave" class="notebook-title" placeholder="Untitled Notebook"
-                    :disabled="isReadOnly" :class="{ 'read-only': isReadOnly }">
+                    :disabled="isReadOnly" :class="{ 'read-only': isReadOnly }" data-testid="notebook-title-input">
 
-                <label v-if="!isReadOnly" class="public-toggle">
-                    <input type="checkbox" v-model="isPublic" @change="handlePublicToggle">
+                <!-- ADD id="public-toggle" HERE -->
+                <label v-if="!isReadOnly" class="public-toggle" id="public-toggle">
+                    <input type="checkbox" v-model="isPublic" @change="handlePublicToggle"
+                        data-testid="public-toggle-checkbox">
                     <span class="toggle-label">
                         <i class="fas" :class="isPublic ? 'fa-globe' : 'fa-lock'"></i>
                         {{ isPublic ? 'Public' : 'Private' }}
@@ -24,11 +26,12 @@
                     </span>
                 </label>
 
-                <span v-else class="public-badge">
+                <span v-else class="public-badge ">
                     <i class="fas fa-globe"></i> Public
                 </span>
             </div>
 
+            <!-- EditorToolbar needs to emit save event with id="btn-save" -->
             <EditorToolbar :is-executing="executing" :is-generating="packageGenerating" :is-diffing="diffGenerating"
                 :is-downloading="packageLoading" :has-executed="hasExecuted" :has-package="hasPackage"
                 :can-diff="canGenerateDiff" :can-download="canDownloadPackage" :is-public="isPublic"
@@ -52,7 +55,7 @@
 
                 <textarea ref="editorTextarea" v-model="cleanContent" @input="debouncedSave" class="rmarkdown-editor"
                     :placeholder="placeholderText" :class="{ 'has-warnings': warnings.length > 0 }"
-                    :readonly="isReadOnly" :disabled="isReadOnly"></textarea>
+                    :readonly="isReadOnly" :disabled="isReadOnly" data-testid="notebook-content-textarea"></textarea>
             </div>
 
             <div class="resize-handle" @mousedown="startResize"></div>
@@ -95,6 +98,7 @@ import EditorToolbar from '@/components/editor/EditorToolbar.vue'
 import OutputPane from '@/components/editor/OutputPane.vue'
 import AnalysisDrawer from '@/components/analysis/AnalysisDrawer.vue'
 import DiffModal from '@/components/analysis/DiffModal.vue'
+import router from '../router'
 
 const route = useRoute()
 const store = useNotebookStore()
@@ -150,12 +154,19 @@ onMounted(async () => {
     cleanContent.value = extractCleanContent(store.notebook.content)
     isPublic.value = store.notebook.is_public || false
 })
+// Auto-save after 2 seconds of inactivity (only for owners)
+const debouncedSave = debounce(() => {
+    if (!isReadOnly.value) {
+        handleSave()
+    }
+}, 2000)
 
-// Sync local state with store when content or title changes (only for owners)
 watch([cleanContent, notebookTitle], () => {
     if (!isReadOnly.value) {
         store.notebook.content = generateFullRmd()
         store.notebook.title = notebookTitle.value
+        // ADD THIS LINE - trigger debounced save when title/content changes
+        debouncedSave()  // ← ADD THIS!
     }
 })
 
@@ -166,19 +177,8 @@ watch([cleanContent, notebookTitle], () => {
 const handlePublicToggle = async () => {
     if (isReadOnly.value) return
 
-    if (isPublic.value && !store.notebook.is_public) {
-        const confirmed = confirm(
-            ' Make this notebook public?\n\n' +
-            '• Anyone with the link can view it\n' +
-            '• It may be discoverable by others\n' +
-            '• Do not include sensitive data\n\n' +
-            'Continue?'
-        )
-        if (!confirmed) {
-            isPublic.value = false
-            return
-        }
-    }
+    store.notebook.is_public = isPublic.value
+
 
     store.notebook.is_public = isPublic.value
     await handleSave()
@@ -186,15 +186,20 @@ const handlePublicToggle = async () => {
 
 const handleSave = async () => {
     if (isReadOnly.value) return
-    await store.save()
+
+    const savedId = await store.save()
+
+    // If this was a new notebook, update the URL with the new ID
+    if (savedId && route.params.id === 'new') {
+        // Update the route to use the new ID
+        router.push(`/notebook/${savedId}`)
+
+        // Also update the notebook ID in store
+        notebook.value.id = savedId
+    }
 }
 
-// Auto-save after 2 seconds of inactivity (only for owners)
-const debouncedSave = debounce(() => {
-    if (!isReadOnly.value) {
-        handleSave()
-    }
-}, 2000)
+
 
 const handleDiff = async () => {
     await store.runDiff()
@@ -242,7 +247,7 @@ const startResize = (e: MouseEvent) => {
  * 
  * @param fn - Function to debounce
  * @param delay - Delay in milliseconds
- * @returns Debounced   
+ * @returns Debounced function
  */
 function debounce<T extends (...args: unknown[]) => unknown>(
     fn: T,

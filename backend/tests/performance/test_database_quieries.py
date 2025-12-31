@@ -296,6 +296,5 @@ class IndexUsageTest(TestCase):
         if has_order_by:
             print("\n✓ Ordering query detected - check EXPLAIN for index usage")
 
-        # This test just documents behavior
-        # In production, you'd use EXPLAIN ANALYZE to verify index usage
+        # todo EXPLAIN ANALYZE
         self.assertTrue(has_order_by, "Should have ORDER BY clause")

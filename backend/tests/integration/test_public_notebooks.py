@@ -120,5 +120,4 @@ class PublicNotebookFeatureTest(TestCase):
             f"/api/notebooks/{self.public_nb.id}/toggle_public/"
         )
 
-        # Your view explicitly checks: if notebook.author != request.user -> 403
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

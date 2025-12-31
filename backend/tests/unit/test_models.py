@@ -32,7 +32,7 @@ class NotebookModelTest(TestCase):
 
     def test_notebook_str_representation(self):
         """Test string representation of notebook"""
-        expected = f"Test Notebook (testuser)"  # ✅ Fixed format
+        expected = f"Test Notebook (testuser)"
         self.assertEqual(str(self.notebook), expected)
 
     def test_notebook_update_timestamp(self):
@@ -72,7 +72,7 @@ class ExecutionModelTest(TestCase):
         self.execution = Execution.objects.create(
             notebook=self.notebook,
             status="pending",
-            html_output="",  # ✅ Fixed field name
+            html_output="",
             error_message="",
         )
 
@@ -91,7 +91,7 @@ class ExecutionModelTest(TestCase):
 
         self.execution.status = "completed"
         self.execution.html_output = "<html>Result</html>"
-        self.execution.completed_at = timezone.now()  # ✅ Set completion time
+        self.execution.completed_at = timezone.now()
         self.execution.save()
         self.assertEqual(self.execution.status, "completed")
         self.assertIsNotNone(self.execution.completed_at)
@@ -109,7 +109,7 @@ class ExecutionModelTest(TestCase):
         """Test notebook can have multiple executions"""
         Execution.objects.create(notebook=self.notebook, status="completed")
         Execution.objects.create(notebook=self.notebook, status="completed")
-        self.assertEqual(self.notebook.executions.count(), 3)  # ✅ Fixed related_name
+        self.assertEqual(self.notebook.executions.count(), 3)
 
     def test_execution_duration_property(self):
         """Test execution duration calculation"""

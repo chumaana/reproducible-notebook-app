@@ -21,8 +21,7 @@ class SystemHealthCheck(TestCase):
 
     def test_api_root_reachable(self):
         """Check if the API root endpoint responds"""
-        # Assuming you have a root view, or at least the server is up
-        # If you don't have a root '/', try '/api/' or a known public endpoint
+
         try:
             response = self.client.get("/api/")
             # 200, 401, 403 are all signs the server is "alive" (not 500 or Connection Refused)

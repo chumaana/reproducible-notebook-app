@@ -6,11 +6,12 @@
             <form @submit.prevent="handleSubmit" class="auth-form">
                 <div class="form-group">
                     <label>Username or Email</label>
-                    <input v-model="username" type="text" required placeholder="Enter your username" />
+                    <input v-model="username" name="username" type="text" required placeholder="Enter your username" />
                 </div>
                 <div class="form-group">
                     <label>Password</label>
-                    <input v-model="password" type="password" required placeholder="Enter your password" />
+                    <input v-model="password" name="password" type="password" required
+                        placeholder="Enter your password" />
                 </div>
                 <div v-if="authStore.error" class="error-msg">
                     {{ authStore.error }}
@@ -31,14 +32,12 @@
  * Login page component.
  * Handles user authentication and redirects to the original requested page or notebooks list.
  */
-
 import { ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useRouter, useRoute } from 'vue-router'
 
 const username = ref('')
 const password = ref('')
-
 const authStore = useAuthStore()
 const router = useRouter()
 const route = useRoute()
@@ -56,7 +55,7 @@ const handleSubmit = async () => {
     if (success) {
         // Redirect to original page or notebooks list
         const redirect = route.query.redirect as string
-        router.push(redirect || '/notebooks')
+        await router.push(redirect || '/notebooks')  // Added await
     }
 }
 </script>

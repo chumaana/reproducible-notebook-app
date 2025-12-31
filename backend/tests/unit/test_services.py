@@ -14,7 +14,7 @@ class StorageManagerUnitTest(TestCase):
     @patch("os.makedirs")
     @patch("os.path.join")
     def test_get_notebook_dir(self, mock_join, mock_makedirs):
-        """Test get_notebook_dir ✅"""
+        """Test get_notebook_dir"""
         mock_join.return_value = "/fake/base/123/reproducibility"
 
         path = self.storage.get_notebook_dir(self.notebook_id)
@@ -26,7 +26,7 @@ class StorageManagerUnitTest(TestCase):
     @patch("os.path.exists")
     @patch("os.path.join")
     def test_read_file(self, mock_join, mock_exists, mock_file):
-        """Test read_file ✅"""
+        """Test read_file"""
         mock_exists.return_value = True
         mock_join.return_value = "/fake/dir/test.txt"
 
@@ -39,7 +39,7 @@ class StorageManagerUnitTest(TestCase):
     @patch("builtins.open", new_callable=mock_open)
     @patch("os.path.join")
     def test_write_file(self, mock_join, mock_file, mock_makedirs):
-        """Test write_file ✅ (not save_file)"""
+        """Test write_file   (not save_file)"""
         mock_join.return_value = "/fake/123/test.txt"
 
         self.storage.write_file("/fake/123", "test.txt", "content")
@@ -55,7 +55,7 @@ class RPackageManagerUnitTest(TestCase):
         self.manager = RPackageManager()
 
     def test_detect_packages_from_content(self):
-        """Test detect_packages_from_content ✅"""
+        """Test detect_packages_from_content"""
         code = 'library(ggplot2)\nrequire("dplyr")\nlibrary(tidyr)'
         deps = self.manager.detect_packages_from_content(code)
 
@@ -68,7 +68,7 @@ class RPackageManagerUnitTest(TestCase):
 
     @patch("subprocess.run")
     def test_install_packages(self, mock_run):
-        """Test install_packages ✅"""
+        """Test install_packages"""
         mock_result = MagicMock()
         mock_result.returncode = 0
         mock_result.stdout = "success"
@@ -88,8 +88,8 @@ class StorageManagerErrorTest(TestCase):
 
     @patch("os.path.exists")
     def test_read_file_nonexistent(self, mock_exists):
-        """Nonexistent file returns empty string ✅"""
+        """Nonexistent file returns empty string"""
         mock_exists.return_value = False
 
         content = self.storage.read_file("/fake", "missing.txt")
-        self.assertEqual(content, "")  # ✅ No exception!
+        self.assertEqual(content, "")

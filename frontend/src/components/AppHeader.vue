@@ -80,6 +80,6 @@ const closeMobileMenu = () => {
 const handleLogout = async () => {
     await authStore.logout()
     closeMobileMenu()
-    router.push('/login')
+    await router.push('/login')
 }
 </script>

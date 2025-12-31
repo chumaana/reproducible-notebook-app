@@ -6,19 +6,19 @@
             <form @submit.prevent="handleSubmit" class="auth-form">
                 <div class="form-group">
                     <label>Username</label>
-                    <input v-model="username" type="text" required />
+                    <input v-model="username" name="username" type="text" required />
                 </div>
                 <div class="form-group">
                     <label>Email</label>
-                    <input v-model="email" type="email" required />
+                    <input v-model="email" name="email" type="email" required />
                 </div>
                 <div class="form-group">
                     <label>Password</label>
-                    <input v-model="password" type="password" required />
+                    <input v-model="password" name="password" type="password" required />
                 </div>
                 <div class="form-group">
                     <label>Confirm Password</label>
-                    <input v-model="rePassword" type="password" required />
+                    <input v-model="rePassword" name="rePassword" type="password" required />
                 </div>
                 <div v-if="errorMessage" class="error-msg">
                     {{ errorMessage }}

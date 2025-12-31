@@ -8,16 +8,15 @@ services:
       - storage_volume:/app/storage
       - /var/run/docker.sock:/var/run/docker.sock
     env_file: backend/.env
-    
+    environment:
+      - FRONTEND_URL=http://frontend:5173  # Add this line
     cap_add:
       - SYS_PTRACE
     security_opt:
       - seccomp:unconfined
-
     depends_on:
       db:
-        condition: service_healthy 
-
+        condition: service_healthy
   frontend:
     build: ./frontend
     ports: ["5173:5173"]
