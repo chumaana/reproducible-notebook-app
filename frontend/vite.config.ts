@@ -1,24 +1,28 @@
-import { defineConfig } from 'vite'
+import { fileURLToPath, URL } from 'node:url'
+import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
-import path from 'path'
 
 export default defineConfig({
   plugins: [vue()],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
+  },
+  test: {
+    globals: true,
+    environment: 'happy-dom',
   },
   server: {
     host: '0.0.0.0',
     port: 5173,
-    allowedHosts: [
-      'frontend', // Docker hostname
-      'localhost', // Local development
-      '127.0.0.1', // Local development
-      '.localhost', // Localhost subdomains
-    ],
-    // Alternatively, you can use 'all' to allow all hosts (less secure)
-    // allowedHosts: 'all',
+    allowedHosts: ['frontend', 'localhost', '127.0.0.1'],
+    hmr: {
+      host: 'frontend',
+      clientPort: 5173,
+    },
+    watch: {
+      usePolling: true,
+    },
   },
 })

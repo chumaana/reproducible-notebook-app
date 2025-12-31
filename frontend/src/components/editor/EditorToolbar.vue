@@ -25,7 +25,7 @@
             <i class="fas fa-chart-bar"></i> Analysis
         </button>
 
-        <button @click="$emit('downloadRmd')" class="btn btn-outline" title="Download .Rmd file" :disabled="isReadOnly">
+        <button @click="$emit('downloadRmd')" class="btn btn-outline" title="Download .Rmd file">
             <i class="fas fa-download"></i>
             .Rmd
         </button>
