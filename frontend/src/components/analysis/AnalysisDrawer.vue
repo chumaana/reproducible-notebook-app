@@ -174,9 +174,13 @@ const hasR4RData = computed(() => {
  * @param lines - Array of issue lines
  * @returns Comma-separated line numbers (e.g., "1, 2, 5")
  */
-const formatLines = (lines: IssueLine[]): string => {
-    if (!lines || lines.length === 0) return ''
-    return lines.map((l) => l.line_number).join(', ')
+const formatLines = (lines: any[]) => {
+    // Subtract 5 from each line number to account for the YAML header
+    const RMARKDOWN_OFFSET = 5;
+
+    return lines
+        .map(line => line.line_number - RMARKDOWN_OFFSET)
+        .join(', ');
 }
 </script>
 

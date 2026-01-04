@@ -139,11 +139,12 @@ export const useNotebookStore = defineStore('notebook', () => {
     try {
       if (notebook.value.id) {
         // Update existing notebook
-        await api.updateNotebook(notebook.value.id, {
+        const updated = await api.updateNotebook(notebook.value.id, {
           title: notebook.value.title,
           content: notebook.value.content,
           is_public: notebook.value.is_public,
         })
+        notebook.value = { ...notebook.value, ...updated }
         return notebook.value.id
       } else {
         // Create new notebook
@@ -152,7 +153,12 @@ export const useNotebookStore = defineStore('notebook', () => {
           content: notebook.value.content,
           is_public: notebook.value.is_public,
         })
-        notebook.value.id = newNb.id
+        notebook.value = {
+          ...notebook.value,
+          id: newNb.id,
+          author: newNb.author,
+          is_public: newNb.is_public,
+        }
         return newNb.id
       }
     } catch (err: unknown) {

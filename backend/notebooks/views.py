@@ -211,7 +211,7 @@ class NotebookViewSet(viewsets.ModelViewSet):
     queryset = Notebook.objects.all()
 
     def get_permissions(self):
-        if self.action in ["retrieve", "list", "executions"]:
+        if self.action in ["retrieve", "list", "executions", "download"]:
             return [AllowAny()]
         return [IsAuthenticated(), IsOwnerOrReadOnlyIfPublic()]
 

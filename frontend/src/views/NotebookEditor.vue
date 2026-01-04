@@ -13,7 +13,6 @@
                 <input v-model="notebookTitle" @blur="handleSave" class="notebook-title" placeholder="Untitled Notebook"
                     :disabled="isReadOnly" :class="{ 'read-only': isReadOnly }" data-testid="notebook-title-input">
 
-                <!-- ADD id="public-toggle" HERE -->
                 <label v-if="!isReadOnly" class="public-toggle" id="public-toggle">
                     <input type="checkbox" v-model="isPublic" @change="handlePublicToggle"
                         data-testid="public-toggle-checkbox">
@@ -137,10 +136,7 @@ const { extractCleanContent, generateFullRmd } = useMarkdown(notebookTitle, clea
 /**
  * Check if current notebook is read-only (public notebook not owned by current user)
  */
-const isReadOnly = computed(() => {
-    const currentUser = JSON.parse(localStorage.getItem('user') || '{}')
-    return notebook.value.is_public && notebook.value.author !== currentUser.username
-})
+
 
 onMounted(async () => {
     const id = route.params.id as string
@@ -148,6 +144,8 @@ onMounted(async () => {
         await store.load(id)
     } else {
         store.resetState()
+        const currentUser = JSON.parse(localStorage.getItem('user') || '{}')
+        store.notebook.author = currentUser.username || ''
     }
 
     notebookTitle.value = store.notebook.title || 'Untitled Notebook'
@@ -179,8 +177,6 @@ const handlePublicToggle = async () => {
 
     store.notebook.is_public = isPublic.value
 
-
-    store.notebook.is_public = isPublic.value
     await handleSave()
 }
 
@@ -199,7 +195,13 @@ const handleSave = async () => {
     }
 }
 
+const isReadOnly = computed(() => {
+    const currentUser = JSON.parse(localStorage.getItem('user') || '{}')
+    console.log(notebook.value.author != currentUser.username)
+    console.log(notebook.value.author, currentUser.username)
 
+    return notebook.value.is_public && notebook.value.author !== currentUser.username
+})
 
 const handleDiff = async () => {
     await store.runDiff()

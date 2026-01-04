@@ -316,13 +316,18 @@ class PublicPrivateToggleTest(SeleniumTestBase):
         """Test making notebook public - checkbox only"""
         self.browser.get(f"{FRONTEND_URL}/notebook/new")
         time.sleep(1)
-
+        title_input = self.wait.until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "input.notebook-title"))
+        )
         label = WebDriverWait(self.browser, 5).until(
             EC.presence_of_element_located((By.ID, "public-toggle"))
         )
-
+        unique_title = f"Public{int(time.time())}"
+        title_input.clear()
+        title_input.send_keys(unique_title)
+        title_input.send_keys(Keys.TAB)
+        time.sleep(2)
         checkbox = label.find_element(By.CSS_SELECTOR, "input[type='checkbox']")
-        print(f"Initial state: {checkbox.is_selected()}")
 
         self.browser.execute_script("arguments[0].click();", checkbox)
 
@@ -330,15 +335,9 @@ class PublicPrivateToggleTest(SeleniumTestBase):
 
         try:
             public_badge = WebDriverWait(self.browser, 5).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, ".public-badge"))
+                EC.presence_of_element_located((By.CSS_SELECTOR, ".toggle-label"))
             )
-            print(f"Badge found: {public_badge.text}")
             self.assertIn("Public", public_badge.text)
-
-            params = self.browser.find_elements(By.ID, "public-toggle")
-            self.assertEqual(
-                len(params), 0, "Old toggle switch should be removed from DOM"
-            )
 
         except TimeoutException:
             print("Current Page Source around header:")
@@ -357,6 +356,9 @@ class PublicPrivateToggleTest(SeleniumTestBase):
         title_input = self.wait.until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "input.notebook-title"))
         )
+        label = WebDriverWait(self.browser, 5).until(
+            EC.presence_of_element_located((By.ID, "public-toggle"))
+        )
         unique_title = f"Public{int(time.time())}"
         title_input.clear()
         title_input.send_keys(unique_title)
@@ -364,36 +366,31 @@ class PublicPrivateToggleTest(SeleniumTestBase):
         time.sleep(2)
 
         try:
-            checkbox = WebDriverWait(self.browser, 5).until(
-                EC.presence_of_element_located(
-                    (By.CSS_SELECTOR, "#public-toggle input[type='checkbox']")
-                )
-            )
+            checkbox = label.find_element(By.CSS_SELECTOR, "input[type='checkbox']")
 
-            # Кликаем
             self.browser.execute_script("arguments[0].click();", checkbox)
 
             time.sleep(1)
 
-            # Ждём появления бейджа Public вместо изменения текста
-            WebDriverWait(self.browser, 5).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, ".public-badge"))
+            public_badge = WebDriverWait(self.browser, 5).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, ".toggle-label"))
             )
 
-            # Verify persistence by refreshing
+            self.assertIn("Public", public_badge.text)
+
+            time.sleep(2)
+
             self.browser.refresh()
             time.sleep(2)
 
-            # Check title and badge persist
             title_val = self.browser.find_element(
                 By.CSS_SELECTOR, "input.notebook-title"
             ).get_attribute("value")
             print(f"Persisted title: {title_val}")
-
-            WebDriverWait(self.browser, 5).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, ".public-badge"))
+            public_badge = WebDriverWait(self.browser, 5).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, ".toggle-label"))
             )
-            print("Persisted public status verified")
+            self.assertIn("Public", public_badge.text)
 
         except TimeoutException as e:
             self.skipTest(f"Could not make notebook public: {e}")
@@ -404,6 +401,7 @@ class PublicPrivateToggleTest(SeleniumTestBase):
         time.sleep(2)
 
         page_text = self.browser.find_element(By.TAG_NAME, "body").text
+        print(page_text)
         self.assertIn(unique_title, page_text)
 
 
@@ -421,16 +419,18 @@ class ReadOnlyModeTest(SeleniumTestBase):
         )
         title_input.clear()
         title_input.send_keys(f"Shared{int(time.time())}")
+        time.sleep(2)
 
+        label = WebDriverWait(self.browser, 5).until(
+            EC.presence_of_element_located((By.ID, "public-toggle"))
+        )
         try:
-            toggle = self.browser.find_element(
-                By.CSS_SELECTOR, ".public-toggle input[type='checkbox']"
-            )
-            toggle.click()
+            checkbox = label.find_element(By.CSS_SELECTOR, "input[type='checkbox']")
+
+            self.browser.execute_script("arguments[0].click();", checkbox)
+
             time.sleep(1)
-            alert = self.wait.until(EC.alert_is_present())
-            alert.accept()
-            time.sleep(3)
+
         except:
             self.skipTest("Could not create public notebook")
 

@@ -15,17 +15,33 @@
                     New Notebook
                 </RouterLink>
             </div>
+
+            <div v-if="isAuthenticated" class="filter-tabs">
+                <button @click="filterType = 'all'" :class="['filter-tab', { active: filterType === 'all' }]">
+                    <i class="fas fa-list"></i>
+                    All ({{ notebooks.length }})
+                </button>
+                <button @click="filterType = 'public'" :class="['filter-tab', { active: filterType === 'public' }]">
+                    <i class="fas fa-globe"></i>
+                    Public ({{ publicCount }})
+                </button>
+                <button @click="filterType = 'private'" :class="['filter-tab', { active: filterType === 'private' }]">
+                    <i class="fas fa-lock"></i>
+                    Private ({{ privateCount }})
+                </button>
+            </div>
+
             <div v-if="loading" class="loading-state">
                 <div class="spinner"></div>
                 <p>Loading notebooks...</p>
             </div>
-            <div v-else-if="notebooks.length === 0" class="empty-state">
+            <div v-else-if="filteredNotebooks.length === 0" class="empty-state">
                 <i class="fas fa-folder-open"></i>
-                <h2>{{ isAuthenticated ? 'No notebooks yet' : 'No public notebooks yet' }}</h2>
-                <p>{{ isAuthenticated ? 'Create your first notebook to get started' : 'Check back later for shared notebooks' }}</p>
+                <h2>{{ emptyStateTitle }}</h2>
+                <p>{{ emptyStateMessage }}</p>
             </div>
             <div v-else class="notebooks-grid">
-                <div v-for="notebook in notebooks" :key="notebook.id" class="notebook-card"
+                <div v-for="notebook in filteredNotebooks" :key="notebook.id" class="notebook-card"
                     @click="openNotebook(notebook.id!)">
                     <div class="notebook-card-header">
                         <div class="title-with-badge">
@@ -64,7 +80,7 @@
 <script setup lang="ts">
 /**
  * Notebook list view displaying user notebooks or public notebooks.
- * - Authenticated users: Shows their own notebooks with edit/delete
+ * - Authenticated users: Shows their own notebooks with filter options
  * - Unauthenticated users: Shows all public notebooks (read-only)
  */
 
@@ -78,8 +94,78 @@ const router = useRouter()
 const authStore = useAuthStore()
 const notebooks = ref<Notebook[]>([])
 const loading = ref(false)
+const filterType = ref<'all' | 'public' | 'private'>('all')
 
 const isAuthenticated = computed(() => authStore.isAuthenticated)
+
+/**
+ * Filter notebooks based on selected filter type.
+ * Only applies to authenticated users.
+ */
+const filteredNotebooks = computed(() => {
+    if (!isAuthenticated.value) {
+        return notebooks.value
+    }
+
+    switch (filterType.value) {
+        case 'public':
+            return notebooks.value.filter(n => n.is_public === true)
+        case 'private':
+            return notebooks.value.filter(n => n.is_public === false)
+        default:
+            return notebooks.value
+    }
+})
+
+/**
+ * Count of public notebooks.
+ */
+const publicCount = computed(() => {
+    return notebooks.value.filter(n => n.is_public === true).length
+})
+
+/**
+ * Count of private notebooks.
+ */
+const privateCount = computed(() => {
+    return notebooks.value.filter(n => n.is_public === false).length
+})
+
+/**
+ * Dynamic empty state title based on filter.
+ */
+const emptyStateTitle = computed(() => {
+    if (!isAuthenticated.value) {
+        return 'No public notebooks yet'
+    }
+
+    switch (filterType.value) {
+        case 'public':
+            return 'No public notebooks'
+        case 'private':
+            return 'No private notebooks'
+        default:
+            return 'No notebooks yet'
+    }
+})
+
+/**
+ * Dynamic empty state message based on filter.
+ */
+const emptyStateMessage = computed(() => {
+    if (!isAuthenticated.value) {
+        return 'Check back later for shared notebooks'
+    }
+
+    switch (filterType.value) {
+        case 'public':
+            return 'Make a notebook public to share it with others'
+        case 'private':
+            return 'All your notebooks are currently public'
+        default:
+            return 'Create your first notebook to get started'
+    }
+})
 
 /**
  * Loads notebooks based on authentication status.
@@ -90,12 +176,10 @@ const loadNotebooks = async () => {
     loading.value = true
     try {
         if (isAuthenticated.value) {
-            // Load user's notebooks (private + public)
             console.log('🔍 Fetching user notebooks...')
             const data = await api.getNotebooks()
             notebooks.value = data
         } else {
-            // Load all public notebooks
             console.log('🌐 Fetching public notebooks...')
             const data = await api.getPublicNotebooks()
             notebooks.value = data
@@ -109,17 +193,15 @@ const loadNotebooks = async () => {
 
 /**
  * Navigates to the notebook editor/viewer.
- * - Authenticated users can edit their own notebooks
- * - Anyone can view public notebooks (read-only if not owner)
  * 
  * @param id - Notebook ID to open
  */
 const openNotebook = (id: number) => {
     router.push(`/notebook/${id}`)
 }
+
 /**
  * Deletes a notebook after confirmation.
- * Only available to authenticated users.
  * 
  * @param id - Notebook ID to delete
  */
@@ -154,3 +236,56 @@ onMounted(() => {
     loadNotebooks()
 })
 </script>
+
+<style scoped>
+/* Filter Tabs */
+.filter-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.filter-tab {
+    padding: 0.75rem 1.5rem;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: -2px;
+}
+
+.filter-tab:hover {
+    color: var(--primary-color);
+    background: var(--background-secondary);
+}
+
+.filter-tab.active {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+}
+
+.filter-tab i {
+    font-size: 1rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .filter-tabs {
+        overflow-x: auto;
+    }
+
+    .filter-tab {
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+        white-space: nowrap;
+    }
+}
+</style>

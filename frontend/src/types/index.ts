@@ -87,9 +87,6 @@ export interface R4RData {
   r_packages: string[] // List of R packages used
   system_libs: string[] // System libraries required
   files_accessed: number // Number of files accessed during execution
-  image_size_mb?: number // Docker image size in megabytes
-  reproducibility_score?: number // Calculated reproducibility score
-  cache_hit?: boolean // Whether R4R used cached results
 }
 
 // ==================== PACKAGE & DIFF ====================

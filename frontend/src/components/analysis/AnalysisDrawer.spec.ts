@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import AnalysisDrawer from './AnalysisDrawer.vue'
 
@@ -6,15 +6,17 @@ describe('AnalysisDrawer.vue', () => {
   const mockR4RData = {
     r_packages: ['base', 'stats', 'dplyr', 'ggplot2', 'tidyr', 'readr'],
     system_libs: ['libcurl4-openssl-dev'],
+    files_accessed: 12,
   }
 
   const mockIssues = [
     {
       title: 'Absolute Path Detected',
       details: 'Found /home/user/data.csv',
-      severity: 'high',
+      severity: 'high' as const,
       fix: 'Use relative paths',
-      lines: [{ line_number: 5, code: 'read.csv("/home/user/data.csv")' }],
+      code: 'read.csv("/home/user/data.csv")',
+      lines: [{ line_number: 10, code: 'read.csv("/home/user/data.csv")' }],
     },
   ]
 

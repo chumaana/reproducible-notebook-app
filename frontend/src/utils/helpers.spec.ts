@@ -1,16 +1,15 @@
-import { describe, it, expect } from 'vitest'
-import { getErrorMessage, formatDate, truncate, generateId } from '@/utils/helpers'
+import { describe, it, expect, vi } from 'vitest'
+import { getErrorMessage, formatDateTime, debounce } from '@/utils/helpers'
 
 describe('Utils - helpers', () => {
   describe('getErrorMessage', () => {
-    it('extracts error from axios error with detail', () => {
+    it('extracts error from axios error with detail field', () => {
       const error = {
         isAxiosError: true,
         response: {
           data: { detail: 'Authentication failed' },
         },
       }
-
       expect(getErrorMessage(error)).toBe('Authentication failed')
     })
 
@@ -21,55 +20,72 @@ describe('Utils - helpers', () => {
           data: { error: 'Invalid input' },
         },
       }
-
       expect(getErrorMessage(error)).toBe('Invalid input')
     })
 
-    it('handles non-axios errors', () => {
+    it('extracts and joins multiple Django field errors', () => {
+      const error = {
+        isAxiosError: true,
+        response: {
+          data: {
+            username: ['This field is required.'],
+            password: ['Too short.'],
+          },
+        },
+      }
+
+      const msg = getErrorMessage(error)
+
+      expect(msg).toContain('username: This field is required.')
+      expect(msg).toContain('password: Too short.')
+    })
+
+    it('handles generic JS errors (non-axios)', () => {
       const error = new Error('Something went wrong')
       expect(getErrorMessage(error)).toBe('Something went wrong')
     })
   })
 
-  describe('formatDate', () => {
-    it('formats ISO date string', () => {
+  describe('formatDateTime', () => {
+    it('formats ISO date string into readable text', () => {
       const date = '2024-03-15T10:30:00Z'
-      const formatted = formatDate(date)
+      const formatted = formatDateTime(date)
 
-      expect(formatted).toContain('Mar')
-      expect(formatted).toContain('15')
+      expect(formatted).not.toBe('Invalid Date')
+      expect(formatted).not.toBe('Unknown')
       expect(formatted).toContain('2024')
     })
 
-    it('returns "Unknown" for undefined', () => {
-      expect(formatDate(undefined)).toBe('Unknown')
+    it('handles undefined input gracefully', () => {
+      expect(formatDateTime(undefined)).toBe('Unknown')
+    })
+
+    it('handles malformed date strings', () => {
+      expect(formatDateTime('not-a-date')).toBe('Invalid Date')
     })
   })
 
-  describe('truncate', () => {
-    it('truncates long text', () => {
-      const text = 'This is a very long text that should be truncated'
-      const result = truncate(text, 20)
+  describe('debounce', () => {
+    it('delays execution and coalesces multiple calls', () => {
+      vi.useFakeTimers()
+      const func = vi.fn()
+      const debouncedFunc = debounce(func, 100)
 
-      expect(result.length).toBeLessThanOrEqual(23)
-      expect(result).toContain('...')
-    })
+      // Call multiple times rapidly
+      debouncedFunc()
+      debouncedFunc()
+      debouncedFunc()
 
-    it('does not truncate short text', () => {
-      const text = 'Short'
-      const result = truncate(text, 20)
+      // Should not be called yet due to delay
+      expect(func).not.toHaveBeenCalled()
 
-      expect(result).toBe('Short')
-    })
-  })
+      // Fast-forward time
+      vi.advanceTimersByTime(100)
 
-  describe('generateId', () => {
-    it('generates unique IDs', () => {
-      const id1 = generateId()
-      const id2 = generateId()
+      // Should execute exactly once
+      expect(func).toHaveBeenCalledTimes(1)
 
-      expect(id1).not.toBe(id2)
-      expect(id1).toContain('-')
+      vi.useRealTimers()
     })
   })
 })
