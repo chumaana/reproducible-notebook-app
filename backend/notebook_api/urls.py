@@ -3,6 +3,11 @@ from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework.authtoken.views import obtain_auth_token
+from drf_spectacular.views import (
+    SpectacularAPIView,
+    SpectacularSwaggerView,
+    SpectacularRedocView,
+)
 
 from notebooks.views import (
     NotebookViewSet,
@@ -28,4 +33,11 @@ urlpatterns = [
     path("api-auth/", include("rest_framework.urls")),
     path("api/auth/profile/", UserProfileView.as_view(), name="user-profile"),
     path("api/auth/logout/", UserLogoutView.as_view(), name="logout"),
+    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+    path(
+        "api/docs/",
+        SpectacularSwaggerView.as_view(url_name="schema"),
+        name="swagger-ui",
+    ),
+    path("api/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
 ]

@@ -429,7 +429,7 @@ class ReadOnlyModeTest(SeleniumTestBase):
 
             self.browser.execute_script("arguments[0].click();", checkbox)
 
-            time.sleep(1)
+            time.sleep(2)
 
         except:
             self.skipTest("Could not create public notebook")
@@ -444,9 +444,13 @@ class ReadOnlyModeTest(SeleniumTestBase):
         time.sleep(2)
 
         # Check read-only state
-        title_input = self.browser.find_element(By.CSS_SELECTOR, "input.notebook-title")
+        title_input = self.browser.find_element(By.CSS_SELECTOR, ".notebook-title")
         is_readonly = title_input.get_attribute("disabled") or "read-only" in (
             title_input.get_attribute("class") or ""
+        )
+        print(
+            title_input.get_attribute("disabled")
+            or "read-only" in (title_input.get_attribute("class") or "")
         )
         self.assertTrue(is_readonly)
 

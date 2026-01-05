@@ -31,7 +31,9 @@ class ReproducibilityAnalyzer:
 
         # Check for random functions without seed
         random_issues = self._detect_random_with_lines(lines)
+        print(random_issues)
         has_seed = any("set.seed" in line for line in lines)
+        print(has_seed)
         if random_issues and not has_seed:
             issues.append(
                 {
@@ -43,6 +45,7 @@ class ReproducibilityAnalyzer:
                     "lines": random_issues,
                 }
             )
+        print(issues)
 
         # Check for time-dependent code
         timestamp_lines = self._find_pattern_lines(lines, r"Sys\.(time|Date|timezone)")
@@ -156,7 +159,7 @@ class ReproducibilityAnalyzer:
                     "lines": secret_lines,
                 }
             )
-
+        print("aaaa", issues)
         return {
             "issues": issues,
             "total_issues": sum(len(i["lines"]) for i in issues),
@@ -186,6 +189,7 @@ class ReproducibilityAnalyzer:
             for pattern, func_name in random_patterns:
                 if re.search(pattern, line):
                     found.append({"line_number": line_num, "code": line.strip()})
+
         return found
 
     def _find_pattern_lines(self, lines: List[str], pattern: str) -> List[Dict]:

@@ -24,7 +24,7 @@ class BaseExecutor(ABC):
         cwd: str,
         desc: str = "Command",
         env: Optional[Dict[str, str]] = None,
-        timeout: int = 300,
+        timeout: int = 600,
     ) -> subprocess.CompletedProcess:
         """
         Execute a shell command with logging and error handling.

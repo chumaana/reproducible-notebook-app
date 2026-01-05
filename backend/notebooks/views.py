@@ -1,6 +1,5 @@
 """
 Django REST Framework views for notebook and user management.
-Optimized for database performance to prevent N+1 query issues.
 """
 
 from rest_framework import viewsets, status, permissions
@@ -20,6 +19,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.contrib.auth import authenticate
 
+
 from .models import Notebook, Execution, ReproducibilityAnalysis
 from .serializers import (
     NotebookSerializer,
@@ -36,7 +36,7 @@ class UserRegisterView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        # Pass data to the serializer to handle validation
+        # Validate input and create new user with token
         serializer = UserSerializer(data=request.data)
 
         if serializer.is_valid():
@@ -55,7 +55,7 @@ class UserRegisterView(APIView):
                 status=status.HTTP_201_CREATED,
             )
 
-        # If password is weak or username exists, this returns the specific error
+        # Return validation errors (weak password, duplicate username, etc.)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -90,6 +90,7 @@ class UserLoginView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Authenticate and return token
         user = authenticate(username=username, password=password)
         print(f"authenticate() returned: {user}")
 
@@ -118,6 +119,7 @@ class UserLogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        # Delete authentication token to end session
         try:
             request.user.auth_token.delete()
             return Response(
@@ -135,6 +137,7 @@ class UserProfileView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        # Return current user profile data
         user = request.user
         return Response(
             {
@@ -147,6 +150,7 @@ class UserProfileView(APIView):
         )
 
     def patch(self, request):
+        # Update profile fields (partial update)
         user = request.user
         user.first_name = request.data.get("first_name", user.first_name)
         user.last_name = request.data.get("last_name", user.last_name)
@@ -170,17 +174,20 @@ class UserViewSet(viewsets.ModelViewSet):
     serializer_class = UserSerializer
 
     def get_permissions(self):
+        # Public registration, authenticated for other actions
         if self.action == "register":
             return [permissions.AllowAny()]
         return [permissions.IsAuthenticated()]
 
     @action(detail=False, methods=["get"])
     def me(self, request):
+        # Get current authenticated user
         serializer = self.get_serializer(request.user)
         return Response(serializer.data)
 
     @action(detail=False, methods=["post"])
     def register(self, request):
+        # Alternative registration endpoint
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
@@ -196,33 +203,28 @@ class IsOwnerOrReadOnlyIfPublic(permissions.BasePermission):
     """
 
     def has_object_permission(self, request, view, obj):
+        # Allow read access for public notebooks
         if request.method in permissions.SAFE_METHODS and obj.is_public:
             return True
+        # Only owner can modify
         return obj.author == request.user
 
 
 class NotebookViewSet(viewsets.ModelViewSet):
-    """
-    Notebook management ViewSet.
-    OPTIMIZED: Uses select_related/prefetch_related to prevent N+1 queries.
-    """
+    """Notebook management ViewSet."""
 
     serializer_class = NotebookSerializer
     queryset = Notebook.objects.all()
 
     def get_permissions(self):
+        # Public read access, authenticated write access
         if self.action in ["retrieve", "list", "executions", "download"]:
             return [AllowAny()]
         return [IsAuthenticated(), IsOwnerOrReadOnlyIfPublic()]
 
     def get_queryset(self):
-        """
-        Get notebooks owned by current user OR that are public.
-        Optimized to fetch related data in single queries.
-        """
-        # ✅ OPTIMIZATION: Prepare base query with eager loading
-        # - select_related('author'): Joins User table
-        # - prefetch_related('executions', 'analysis'): Batches related data
+        """Get notebooks owned by current user OR that are public."""
+        # Eager load related data to prevent N+1 queries
         base_qs = Notebook.objects.select_related("author").prefetch_related(
             "executions", "analysis"
         )
@@ -230,15 +232,18 @@ class NotebookViewSet(viewsets.ModelViewSet):
         user = self.request.user
 
         if user.is_authenticated:
+            # Show owned + public notebooks
             return (
                 base_qs.filter(Q(author=user) | Q(is_public=True))
                 .distinct()
                 .order_by("-updated_at")
             )
         else:
+            # Show only public notebooks for anonymous users
             return base_qs.filter(is_public=True).order_by("-updated_at")
 
     def retrieve(self, request, *args, **kwargs):
+        # Get single notebook with privacy check
         notebook = self.get_object()
 
         if not notebook.is_public:
@@ -257,10 +262,12 @@ class NotebookViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def perform_create(self, serializer):
+        # Set current user as author
         serializer.save(author=self.request.user)
 
     @action(detail=True, methods=["post"])
     def execute(self, request, pk=None):
+        # Execute R Markdown notebook and save results
         notebook = self.get_object()
 
         if notebook.author != request.user:
@@ -273,15 +280,18 @@ class NotebookViewSet(viewsets.ModelViewSet):
         execution = Execution.objects.create(notebook=notebook, status="running")
 
         try:
+            # Run knitr/rmarkdown
             executor = RmdExecutor()
             result = executor.execute(notebook.content, notebook.id)
 
             if result.get("success"):
+                # Save HTML output and mark completed
                 execution.html_output = result.get("html", "")
                 execution.status = "completed"
                 execution.completed_at = timezone.now()
                 execution.save()
 
+                # Save static analysis results
                 ReproducibilityAnalysis.objects.update_or_create(
                     notebook=notebook,
                     defaults={
@@ -292,6 +302,7 @@ class NotebookViewSet(viewsets.ModelViewSet):
                 )
                 return Response(result)
             else:
+                # Execution failed
                 execution.status = "failed"
                 execution.error_message = result.get("error", "Unknown error")
                 execution.completed_at = timezone.now()
@@ -299,6 +310,7 @@ class NotebookViewSet(viewsets.ModelViewSet):
                 return Response(result, status=status.HTTP_400_BAD_REQUEST)
 
         except Exception as e:
+            # Server error
             traceback.print_exc()
             execution.status = "failed"
             execution.error_message = str(e)
@@ -311,6 +323,7 @@ class NotebookViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def generate_package(self, request, pk=None):
+        # Generate reproducibility package using r4r
         notebook = self.get_object()
 
         if notebook.author != request.user:
@@ -320,10 +333,12 @@ class NotebookViewSet(viewsets.ModelViewSet):
             )
 
         try:
+            # Run r4r to trace dependencies
             executor = R4RExecutor()
             result = executor.execute(notebook.id)
 
             if result.get("success"):
+                # Save Dockerfile, Makefile, and dependencies
                 ReproducibilityAnalysis.objects.update_or_create(
                     notebook=notebook,
                     defaults={
@@ -347,6 +362,7 @@ class NotebookViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def generate_diff(self, request, pk=None):
+        # Generate rdiff comparison visualization
         notebook = self.get_object()
 
         if notebook.author != request.user:
@@ -356,10 +372,12 @@ class NotebookViewSet(viewsets.ModelViewSet):
             )
 
         try:
+            # Run rdiff binary
             executor = RDiffExecutor()
             result = executor.execute(notebook.id)
 
             if result.get("success"):
+                # Save diff HTML
                 ReproducibilityAnalysis.objects.update_or_create(
                     notebook=notebook,
                     defaults={
@@ -379,6 +397,7 @@ class NotebookViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"])
     @method_permission_classes([AllowAny])
     def download(self, request, pk=None):
+        # Download notebook as .Rmd file
         notebook = self.get_object()
 
         if not notebook.is_public:
@@ -393,6 +412,7 @@ class NotebookViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"])
     def download_package(self, request, pk=None):
+        # Download reproducibility package ZIP
         notebook = self.get_object()
 
         if not notebook.is_public:
@@ -422,10 +442,7 @@ class NotebookViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"])
     @method_permission_classes([AllowAny])
     def executions(self, request, pk=None):
-        """
-        Get execution history for notebook.
-        OPTIMIZED: Uses select_related to prevent N+1 queries.
-        """
+        """Get execution history for notebook."""
         try:
             notebook = Notebook.objects.get(pk=pk)
         except Notebook.DoesNotExist:
@@ -444,8 +461,7 @@ class NotebookViewSet(viewsets.ModelViewSet):
                 {"error": "Access denied"}, status=status.HTTP_403_FORBIDDEN
             )
 
-        # ✅ OPTIMIZATION: select_related('notebook') prevents repeated DB hits
-        # when the serializer accesses 'notebook.title'.
+        # Fetch execution history with notebook data
         executions = (
             notebook.executions.all().select_related("notebook").order_by("-started_at")
         )
@@ -456,6 +472,7 @@ class NotebookViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"])
     @method_permission_classes([AllowAny])
     def reproducibility(self, request, pk=None):
+        # Get reproducibility analysis data
         try:
             notebook = Notebook.objects.get(pk=pk)
         except Notebook.DoesNotExist:
@@ -486,6 +503,7 @@ class NotebookViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def toggle_public(self, request, pk=None):
+        # Toggle notebook public/private visibility
         notebook = self.get_object()
         if notebook.author != request.user:
             return Response(
@@ -504,20 +522,14 @@ class NotebookViewSet(viewsets.ModelViewSet):
 
 
 class ExecutionViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    Read-only ViewSet for execution records.
-    OPTIMIZED: Uses select_related to prevent N+1 queries.
-    """
+    """Read-only ViewSet for execution records."""
 
     serializer_class = ExecutionSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        """
-        Get executions for current user's notebooks.
-        Optimized with select_related.
-        """
-        # ✅ OPTIMIZATION: Fetch notebook and author details in the main query
+        """Get executions for current user's notebooks."""
+        # Fetch execution records with related notebook data
         return (
             Execution.objects.filter(notebook__author=self.request.user)
             .select_related("notebook", "notebook__author")
@@ -532,6 +544,7 @@ class ReproducibilityAnalysisViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        # Get analyses for current user's notebooks
         return ReproducibilityAnalysis.objects.filter(
             notebook__author=self.request.user
         )

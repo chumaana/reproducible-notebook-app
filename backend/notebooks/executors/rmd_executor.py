@@ -11,7 +11,7 @@ from typing import Dict, Any
 from .base import BaseExecutor
 from ..services.package_manager import RPackageManager
 from ..services.storage_manager import StorageManager
-from ..static_analyzer import ReproducibilityAnalyzer
+from ..services.static_analyzer import ReproducibilityAnalyzer
 
 
 class RmdExecutor(BaseExecutor):
@@ -48,9 +48,10 @@ class RmdExecutor(BaseExecutor):
 
         final_dir = self.storage_manager.get_notebook_dir(notebook_id)
 
-        # Run static analysis
+        # Run static analysis (non-blocking)
         try:
             static_analysis = self.analyzer.analyze(content or "")
+            print(static_analysis)
         except Exception:
             static_analysis = {"issues": [], "total_issues": 0}
 
@@ -91,11 +92,15 @@ class RmdExecutor(BaseExecutor):
                     static_analysis=static_analysis,
                 )
 
-            # Save HTML output and Rmd file
+            # Save artifacts
             html_content = self.storage_manager.read_file(temp_dir, "notebook.html")
+
+            # Save HTML for display
             self.storage_manager.write_file(
                 final_dir, "notebook_local.html", html_content
             )
+
+            # Save source .Rmd for future package generation (r4r)
             shutil.copy(rmd_path, os.path.join(final_dir, "notebook.Rmd"))
 
             duration = time.time() - start_time
