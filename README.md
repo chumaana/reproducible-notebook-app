@@ -193,7 +193,7 @@ ggplot(data, aes(x, y)) +
 
 The database is **automatically configured** when running `docker compose up`:
 
-- PostgreSQL 15 container starts with health checks
+- PostgreSQL 18 container starts with health checks
 - Database `notebooks` is created on first run
 - Django migrations execute via `entrypoint.sh`
 - **No manual setup required** 
