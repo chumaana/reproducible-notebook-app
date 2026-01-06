@@ -69,20 +69,13 @@ class UserLoginView(APIView):
         password = request.data.get("password")
 
         # DEBUG LOGGING
-        print(f"\n=== LOGIN ATTEMPT ===")
-        print(f"Username: '{username}'")
-        print(f"Password: '{password}'")
-        print(f"Request data: {request.data}")
 
         # Check if user exists
         try:
             db_user = User.objects.get(username=username)
-            print(f"User found in DB: {db_user.username}")
-            print(f"User is_active: {db_user.is_active}")
-            print(f"Password check: {db_user.check_password(password)}")
+
         except User.DoesNotExist:
             print(f"User '{username}' does NOT exist in database")
-        print(f"=====================\n")
 
         if not username or not password:
             return Response(
@@ -92,7 +85,6 @@ class UserLoginView(APIView):
 
         # Authenticate and return token
         user = authenticate(username=username, password=password)
-        print(f"authenticate() returned: {user}")
 
         if user:
             token, _ = Token.objects.get_or_create(user=user)
@@ -107,7 +99,6 @@ class UserLoginView(APIView):
                 }
             )
 
-        print("Authentication failed - returning error")
         return Response(
             {"error": "Invalid credentials"}, status=status.HTTP_400_BAD_REQUEST
         )
@@ -276,7 +267,6 @@ class NotebookViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        print(f"DEBUG: Executing notebook {notebook.id}")
         execution = Execution.objects.create(notebook=notebook, status="running")
 
         try:

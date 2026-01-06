@@ -1,3 +1,11 @@
+<script setup lang="ts">
+/**
+ * HelpView Component.
+ * Provides users with comprehensive documentation regarding the editor interface,
+ * code analysis processes, and the creation of reproducible Docker packages.
+ */
+</script>
+
 <template>
   <div class="help-page">
     <div class="container">
@@ -154,7 +162,6 @@ plot(data$wt, data$mpg)
         </div>
       </section>
 
-      <!-- Reproducibility -->
       <section id="reproducibility" class="help-section">
         <h2><i class="fas fa-box"></i> Reproducibility Features</h2>
 
@@ -184,6 +191,7 @@ plot(data$wt, data$mpg)
 
         <div class="help-card">
           <h3>Complete Workflow</h3>
+
           <div class="workflow-steps-help">
             <div class="workflow-step-help">
               <div class="step-num">1</div>
@@ -230,7 +238,6 @@ plot(data$wt, data$mpg)
           </ul>
         </div>
       </section>
-
 
     </div>
   </div>

@@ -122,54 +122,75 @@ import { ref, computed, watchEffect } from 'vue'
 import CodeHighlighter from '@/components/common/CodeHighlighter.vue'
 import type { StaticAnalysisIssue, R4RData } from '@/types/index'
 
+/**
+ * Issue line information
+ */
 interface IssueLine {
     line_number: number
     code: string
 }
 
 const props = defineProps<{
+    /** Array of static analysis issues */
     issues: StaticAnalysisIssue[]
+    /** Notebook code content */
     code: string
+    /** HTML diff result, if available */
     diffResult?: string | null
+    /** Whether package download is in progress */
     packageLoading: boolean
+    /** Whether static analysis has been performed */
     hasStaticAnalysis: boolean
+    /** R4R environment data including packages and system libraries */
     r4rData?: R4RData | null
+    /** Whether the notebook is read-only */
     isReadOnly?: boolean
 }>()
 
 defineEmits<{
+    /** Close the analysis drawer */
     close: []
+    /** Open the diff viewer */
     openDiff: []
+    /** Download the reproducibility package */
     download: []
 }>()
+
 watchEffect(() => {
     console.log('r4rData prop:', props.r4rData)
     console.log('r4rData type:', typeof props.r4rData)
     console.log('r4rData is array:', Array.isArray(props.r4rData))
 })
+
+/** Whether to show all R packages (expanded state) */
 const showAllPackages = ref(false)
+/** Whether to show all system libraries (expanded state) */
 const showAllSysLibs = ref(false)
 
+/** List of R packages from R4R data */
 const rPackages = computed(() => props.r4rData?.r_packages || [])
+/** List of system libraries from R4R data */
 const sysLibs = computed(() => props.r4rData?.system_libs || [])
 
-// Show first 5 items when collapsed, all when expanded
+/** Visible R packages (first 5 when collapsed, all when expanded) */
 const visiblePackages = computed(() =>
     showAllPackages.value ? rPackages.value : rPackages.value.slice(0, 5)
 )
 
+/** Visible system libraries (first 5 when collapsed, all when expanded) */
 const visibleSysLibs = computed(() =>
     showAllSysLibs.value ? sysLibs.value : sysLibs.value.slice(0, 5)
 )
 
+/** Whether R4R data is available and valid */
 const hasR4RData = computed(() => {
     if (!props.r4rData || typeof props.r4rData !== 'object') return false
     return Object.keys(props.r4rData).length > 0
 })
 
-
 /**
  * Formats issue line numbers for display.
+ * Adjusts line numbers to account for YAML header offset.
  * 
  * @param lines - Array of issue lines
  * @returns Comma-separated line numbers (e.g., "1, 2, 5")

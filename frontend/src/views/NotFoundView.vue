@@ -1,10 +1,26 @@
+<script setup lang="ts">
+/**
+ * NotFoundView Component.
+ * * Serves as the "Catch-all" fallback page for the application's routing system.
+ * It is triggered whenever a user attempts to access a URL that does not 
+ * match any defined path in the Vue Router configuration.
+ * * Purpose:
+ * - Provides immediate feedback for dead links or typos.
+ * - Prevents the application from displaying a blank screen or broken UI.
+ * - Guides the user back to the primary functional area (Home).
+ */
+import { RouterLink } from 'vue-router'
+</script>
+
 <template>
     <div class="not-found-page">
         <div class="container">
             <div class="not-found-content">
                 <i class="fas fa-exclamation-triangle"></i>
+
                 <h1>404</h1>
                 <p>Page not found</p>
+
                 <RouterLink to="/" class="btn btn-primary">
                     <i class="fas fa-home"></i>
                     Go Home
@@ -14,11 +30,12 @@
     </div>
 </template>
 
-<script setup lang="ts">
-import { RouterLink } from 'vue-router'
-</script>
-
 <style scoped>
+/**
+ * Layout styling for the 404 page.
+ * Uses Flexbox to vertically and horizontally center the error content,
+ * ensuring it remains legible and prominent on all screen sizes.
+ */
 .not-found-page {
     min-height: 100vh;
     display: flex;

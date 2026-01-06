@@ -59,7 +59,6 @@
  * Includes responsive mobile menu and conditional rendering based on auth state.
  * The "Notebooks" link shows user's notebooks when logged in, or public notebooks when not logged in.
  */
-
 import { ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -67,16 +66,26 @@ import { useAuthStore } from '@/stores/auth'
 const authStore = useAuthStore()
 const router = useRouter()
 
+/** Controls mobile menu open/closed state */
 const mobileMenuOpen = ref(false)
 
+/**
+ * Toggle mobile menu visibility
+ */
 const toggleMobileMenu = () => {
     mobileMenuOpen.value = !mobileMenuOpen.value
 }
 
+/**
+ * Close mobile menu
+ */
 const closeMobileMenu = () => {
     mobileMenuOpen.value = false
 }
 
+/**
+ * Handle user logout and redirect to login page
+ */
 const handleLogout = async () => {
     await authStore.logout()
     closeMobileMenu()

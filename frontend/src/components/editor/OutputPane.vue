@@ -36,7 +36,6 @@
             </details>
         </div>
 
-        <!-- ✅ Save Error -->
         <div v-else-if="saveError" class="output-save-error">
             <div class="error-banner save-error-banner">
                 <i class="fas fa-floppy-disk"></i>

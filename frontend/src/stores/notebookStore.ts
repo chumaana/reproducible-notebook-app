@@ -43,6 +43,9 @@ export const useNotebookStore = defineStore('notebook', () => {
   )
 
   // Actions
+  /**
+   * Reset all store state to initial values
+   */
   function resetState() {
     notebook.value = {
       id: undefined,
@@ -66,6 +69,7 @@ export const useNotebookStore = defineStore('notebook', () => {
 
   /**
    * Load notebook and its analysis data
+   * @param id - Notebook ID to load
    */
   async function load(id: string): Promise<void> {
     // resetState()
@@ -128,9 +132,9 @@ export const useNotebookStore = defineStore('notebook', () => {
       throw err
     }
   }
+
   /**
-   * Save notebook with title, content, and visibility status.
-   *
+   * Save notebook with title, content, and visibility status
    * @returns Notebook ID
    */
   async function save(): Promise<number | undefined> {

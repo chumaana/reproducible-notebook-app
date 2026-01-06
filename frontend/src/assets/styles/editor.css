@@ -648,7 +648,6 @@
   background: #f8f9fa;
   color: #495057;
 }
-/* Unified Public Toggle & Badge Styles */
 .public-toggle {
   display: flex;
   align-items: center;
@@ -678,7 +677,6 @@
   font-size: 14px;
 }
 
-/* Active state - matches public badge */
 .public-toggle input:checked + .toggle-label {
   background: #e7f5ff;
   border-color: #4dabf7;
@@ -690,14 +688,12 @@
   transform: translateY(-1px);
 }
 
-/* Private state (unchecked toggle) */
 .toggle-label.private {
   background: #f9fafb;
   border-color: #e5e7eb;
   color: #6b7280;
 }
 
-/* Info icon */
 .info-icon {
   color: #9ca3af;
   font-size: 0.875rem;
