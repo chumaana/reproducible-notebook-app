@@ -30,7 +30,7 @@ This application enables researchers and data scientists to write R Markdown not
 
 ### Prerequisites
 
-- Docker 28.3.0 and Docker Compose 5.0.0+
+- Docker 28.3.0 and Docker Compose  2.37.3+
 - 4GB RAM (8GB recommended)
 - 5GB free disk space
 
