@@ -2,13 +2,24 @@ import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import AnalysisDrawer from './AnalysisDrawer.vue'
 
+/**
+ * Test suite for AnalysisDrawer.vue.
+ * Verifies the visualization of reproducibility metrics, issue reporting, and download controls.
+ */
 describe('AnalysisDrawer.vue', () => {
+  /** * Mock data representing runtime dependencies captured by the r4r tool.
+   * Includes R packages, system libraries, and file access counts.
+   */
   const mockR4RData = {
     r_packages: ['base', 'stats', 'dplyr', 'ggplot2', 'tidyr', 'readr'],
     system_libs: ['libcurl4-openssl-dev'],
     files_accessed: 12,
   }
 
+  /**
+   * Mock static analysis issue representing an absolute path violation.
+   * Used to test line number rendering.
+   */
   const mockIssues = [
     {
       title: 'Absolute Path Detected',
@@ -20,6 +31,10 @@ describe('AnalysisDrawer.vue', () => {
     },
   ]
 
+  /**
+   * Verifies that the package summary displays the correct total count
+   * and correctly truncates the visible list (showing only first 5 items).
+   */
   it('renders package count correctly', () => {
     const wrapper = mount(AnalysisDrawer, {
       props: {
@@ -36,6 +51,10 @@ describe('AnalysisDrawer.vue', () => {
     expect(wrapper.find('.show-more-btn').exists()).toBe(true)
   })
 
+  /**
+   * Tests the interactivity of the dependency card.
+   * Clicking the header should expand the view to show all detected packages.
+   */
   it('expands package list when header is clicked', async () => {
     const wrapper = mount(AnalysisDrawer, {
       props: {
@@ -53,6 +72,10 @@ describe('AnalysisDrawer.vue', () => {
     expect(wrapper.find('.metric-card').classes()).toContain('expanded')
   })
 
+  /**
+   * Verifies that issue line numbers are correctly adjusted.
+   * Note: Input line 10 becomes 5 due to the RMARKDOWN_OFFSET calculation.
+   */
   it('formats line numbers correctly', () => {
     const wrapper = mount(AnalysisDrawer, {
       props: {
@@ -66,6 +89,10 @@ describe('AnalysisDrawer.vue', () => {
     expect(wrapper.find('.issue-count').text()).toContain('Line(s): 5')
   })
 
+  /**
+   * Checks the UI state during asynchronous package generation/download.
+   * Ensure buttons are disabled and loading spinners are visible.
+   */
   it('disables download button and shows spinner when packageLoading is true', () => {
     const wrapper = mount(AnalysisDrawer, {
       props: {
@@ -82,6 +109,9 @@ describe('AnalysisDrawer.vue', () => {
     expect(downloadBtn.text()).toBe('Downloading...')
   })
 
+  /**
+   * Ensures the download action is properly emitted to the parent component.
+   */
   it('emits download event when primary button is clicked', async () => {
     const wrapper = mount(AnalysisDrawer, {
       props: {

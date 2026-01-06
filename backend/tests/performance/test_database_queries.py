@@ -4,7 +4,7 @@ Database Query Optimization Tests
 Detects N+1 queries, measures query counts, and validates optimizations.
 Tests that serializers use select_related/prefetch_related properly.
 
-Location: backend/tests/performance/test_database_queries.py
+tests/performance/test_database_queries.py
 """
 
 from django.test import TestCase
@@ -76,8 +76,6 @@ class NotebookListQueryOptimizationTest(TestCase):
                 sql = query["sql"][:100]
                 print(f"  {i}. {sql}...")
 
-        # Soft assertion - warn but don't fail
-        # In production, you'd fix the viewset and make this a hard assertion
         self.assertLess(
             num_queries,
             25,  # Should be ~3-5, but allowing up to 25 for now
@@ -177,7 +175,6 @@ class BulkOperationQueryTest(TestCase):
 
     def test_bulk_create_notebooks(self):
         """Creating multiple notebooks shouldn't scale linearly"""
-        # This tests if we're using bulk_create efficiently
 
         with CaptureQueriesContext(connection) as context:
             for i in range(5):
@@ -296,5 +293,4 @@ class IndexUsageTest(TestCase):
         if has_order_by:
             print("\n✓ Ordering query detected - check EXPLAIN for index usage")
 
-        # todo EXPLAIN ANALYZE
         self.assertTrue(has_order_by, "Should have ORDER BY clause")

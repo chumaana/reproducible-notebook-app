@@ -3,6 +3,9 @@ import { mount } from '@vue/test-utils'
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from './HomeView.vue'
 
+/**
+ * Mock router setup for testing navigation links within the HomeView.
+ */
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -12,7 +15,16 @@ const router = createRouter({
   ],
 })
 
+/**
+ * Test suite for HomeView.vue.
+ * Verifies the landing page structure, including hero section, call-to-actions (CTA),
+ * feature highlights, and workflow visualization.
+ */
 describe('HomeView.vue', () => {
+  /**
+   * Tests the visibility of key branding elements.
+   * Uses regex matching to account for potential HTML whitespace formatting in the title.
+   */
   it('renders the hero title and main lead text', async () => {
     const wrapper = mount(HomeView, {
       global: { plugins: [router] },
@@ -23,6 +35,11 @@ describe('HomeView.vue', () => {
     expect(wrapper.find('.hero-lead').exists()).toBe(true)
   })
 
+  /**
+   * Verifies navigation paths.
+   * Ensures the primary "New Notebook" and secondary "Browse" buttons
+   * link to the correct application routes using the router mock.
+   */
   it('contains correctly mapped CTA buttons', async () => {
     const wrapper = mount(HomeView, {
       global: { plugins: [router] },
@@ -36,6 +53,10 @@ describe('HomeView.vue', () => {
     expect(secondaryCta.attributes('href')).toBe('/notebooks')
   })
 
+  /**
+   * Checks for the presence of the product feature grid.
+   * Ensures all 6 core features (Docker, Analysis, etc.) are rendered to the user.
+   */
   it('renders all 6 feature cards', () => {
     const wrapper = mount(HomeView, {
       global: { plugins: [router] },
@@ -47,6 +68,10 @@ describe('HomeView.vue', () => {
     expect(wrapper.text()).toContain('Static Analysis')
   })
 
+  /**
+   * Verifies the "How it works" section.
+   * Ensures the logical progression of steps (Write -> ... -> Download) is displayed in the correct order.
+   */
   it('displays the workflow steps in order', () => {
     const wrapper = mount(HomeView, {
       global: { plugins: [router] },

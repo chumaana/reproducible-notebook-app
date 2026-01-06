@@ -3,8 +3,7 @@ API Response Time Benchmarks
 
 Tests all endpoints with realistic data volumes and measures latency.
 Sets performance thresholds based on endpoint complexity.
-
-Location: backend/tests/performance/test_response_times.py
+tests/performance/test_response_times.py
 """
 
 import time
@@ -391,7 +390,6 @@ class PerformanceSummaryTest(TestCase):
             ("POST", "/api/notebooks/", "Create notebook"),
             ("PATCH", f"/api/notebooks/{self.notebook.id}/", "Update notebook"),
             ("GET", f"/api/notebooks/{self.notebook.id}/executions/", "Get executions"),
-            # FIXED: Added /auth/ prefix
             ("GET", "/api/auth/profile/", "Get profile"),
         ]
 

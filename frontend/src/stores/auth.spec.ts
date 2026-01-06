@@ -3,23 +3,34 @@ import { setActivePinia, createPinia } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/services/api'
 
+// Mock the API service to isolate store testing from network requests
 vi.mock('@/services/api')
 
+/**
+ * Test suite for the Authentication Store (Pinia).
+ * Verifies state management for Login, Registration, and Session persistence.
+ */
 describe('Auth Store', () => {
   let setItemSpy = vi.spyOn(Storage.prototype, 'setItem')
   let removeItemSpy = vi.spyOn(Storage.prototype, 'removeItem')
 
   beforeEach(() => {
+    // Reset Pinia and LocalStorage before each test to ensure isolation
     setActivePinia(createPinia())
     vi.clearAllMocks()
 
     localStorage.clear()
 
+    // Re-initialize spies
     setItemSpy = vi.spyOn(Storage.prototype, 'setItem')
     removeItemSpy = vi.spyOn(Storage.prototype, 'removeItem')
   })
 
   describe('login', () => {
+    /**
+     * Test successful authentication flow.
+     * The store should update its state with the returned token and user profile.
+     */
     it('sets token and user on successful login', async () => {
       const mockResponse = {
         token: 'test-token-123',
@@ -37,6 +48,11 @@ describe('Auth Store', () => {
       expect(store.isAuthenticated).toBe(true)
     })
 
+    /**
+     * Test persistence.
+     * Critical for UX: authentication data must be saved to LocalStorage
+     * to keep the user logged in across page reloads.
+     */
     it('stores token in localStorage', async () => {
       const mockResponse = {
         token: 'test-token-123',
@@ -52,6 +68,10 @@ describe('Auth Store', () => {
       expect(setItemSpy).toHaveBeenCalledWith('user', JSON.stringify(mockResponse.user))
     })
 
+    /**
+     * Test error handling during login.
+     * The store should capture API errors to display feedback to the user.
+     */
     it('returns false and sets error on login failure', async () => {
       const mockError = {
         response: { data: { error: 'Invalid credentials' } },
@@ -67,6 +87,10 @@ describe('Auth Store', () => {
       expect(store.token).toBeNull()
     })
 
+    /**
+     * Test UI state management (loading indicators).
+     * `loading` should be true only while the async request is pending.
+     */
     it('sets loading state during login', async () => {
       vi.mocked(api.login).mockImplementation(
         () =>
@@ -94,6 +118,10 @@ describe('Auth Store', () => {
   })
 
   describe('register', () => {
+    /**
+     * Test registration flow.
+     * Following successful registration, the user should be automatically logged in.
+     */
     it('registers user and auto-logs in', async () => {
       const mockResponse = {
         token: 'new-token-456',
@@ -114,6 +142,9 @@ describe('Auth Store', () => {
       expect(store.isAuthenticated).toBe(true)
     })
 
+    /**
+     * Test validation error handling during registration (e.g., duplicate username).
+     */
     it('handles registration errors', async () => {
       const mockError = {
         response: {
@@ -139,6 +170,10 @@ describe('Auth Store', () => {
   })
 
   describe('logout', () => {
+    /**
+     * Test session termination.
+     * All sensitive data must be wiped from the state.
+     */
     it('clears token and user data', () => {
       const store = useAuthStore()
       store.token = 'test-token'
@@ -151,6 +186,10 @@ describe('Auth Store', () => {
       expect(store.isAuthenticated).toBe(false)
     })
 
+    /**
+     * Test persistence cleanup.
+     * Sensitive data must be removed from LocalStorage to prevent unauthorized access.
+     */
     it('removes data from localStorage', () => {
       const store = useAuthStore()
       store.logout()
@@ -161,6 +200,9 @@ describe('Auth Store', () => {
   })
 
   describe('clearError', () => {
+    /**
+     * Test utility for resetting error messages (e.g., when user retries input).
+     */
     it('clears error message', () => {
       const store = useAuthStore()
       store.error = 'Some error'

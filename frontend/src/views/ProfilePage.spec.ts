@@ -13,6 +13,11 @@ vi.mock('@/services/api', () => ({
   },
 }))
 
+/**
+ * Test suite for ProfilePage.vue.
+ * Verifies profile data loading, form state management (edit/read-only),
+ * and synchronization with the backend.
+ */
 describe('ProfilePage.vue', () => {
   const mockUser = {
     username: 'r_developer',
@@ -27,6 +32,10 @@ describe('ProfilePage.vue', () => {
     vi.mocked(api.getUserProfile).mockResolvedValue(mockUser)
   })
 
+  /**
+   * Checks if the component correctly fetches and populates the form
+   * with user data upon mounting.
+   */
   it('loads and displays user profile data on mount', async () => {
     const wrapper = mount(ProfilePage)
 
@@ -35,6 +44,7 @@ describe('ProfilePage.vue', () => {
     expect(api.getUserProfile).toHaveBeenCalled()
 
     const usernameInput = wrapper.find('input[type="text"]')
+    // Username is typically immutable after registration
     expect(usernameInput.attributes()).toHaveProperty('disabled')
     expect((usernameInput.element as HTMLInputElement).value).toBe('r_developer')
 
@@ -42,6 +52,10 @@ describe('ProfilePage.vue', () => {
     expect((emailInput.element as HTMLInputElement).value).toBe('dev@r-notebook.com')
   })
 
+  /**
+   * Verifies the UI toggle logic.
+   * Clicking "Edit" should enable input fields for user interaction.
+   */
   it('toggles edit mode and unlocks inputs', async () => {
     const wrapper = mount(ProfilePage)
     await flushPromises()
@@ -55,6 +69,10 @@ describe('ProfilePage.vue', () => {
     expect(wrapper.find('.btn-success').text()).toContain('Save Changes')
   })
 
+  /**
+   * Ensures that cancelling the edit operation restores the initial state
+   * and discards any unsaved user input.
+   */
   it('restores original data when "Cancel" is clicked', async () => {
     const wrapper = mount(ProfilePage)
     await flushPromises()
@@ -71,6 +89,11 @@ describe('ProfilePage.vue', () => {
     expect(wrapper.find('.btn-primary').text()).toContain('Edit Profile')
   })
 
+  /**
+   * Tests the full update cycle.
+   * On successful API response, the UI should show a confirmation message
+   * and return to the read-only view.
+   */
   it('shows success message and updates state on successful save', async () => {
     vi.mocked(api.updateUserProfile).mockResolvedValue({
       ...mockUser,

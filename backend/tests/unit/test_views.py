@@ -66,7 +66,6 @@ class UserViewSetTest(TestCase):
         data = {
             "username": "newuser",
             "email": "new@example.com",
-            # FIXED: Stronger password to pass validators
             "password": "ComplexPass123!",
         }
 
@@ -107,7 +106,6 @@ class UserAuthViewsTest(TestCase):
         data = {
             "username": "newuser_view",
             "email": "new_view@example.com",
-            # FIXED: Stronger password to pass validators
             "password": "ComplexPass123!",
         }
 

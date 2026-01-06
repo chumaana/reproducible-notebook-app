@@ -5,6 +5,7 @@ import LoginView from './LoginView.vue'
 import { useAuthStore } from '@/stores/auth'
 import { createRouter, createWebHistory } from 'vue-router'
 
+/** Mock router configuration for testing navigation behavior */
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -13,11 +14,19 @@ const router = createRouter({
   ],
 })
 
+/**
+ * Test suite for LoginView.vue.
+ * Verifies form rendering, input handling, error feedback, and the authentication workflow.
+ */
 describe('LoginView.vue', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
   })
 
+  /**
+   * Verifies the structural integrity of the login form.
+   * Ensures essential elements (header, username input, password input) are present.
+   */
   it('renders the login form correctly', () => {
     const wrapper = mount(LoginView, {
       global: { plugins: [router] },
@@ -28,6 +37,10 @@ describe('LoginView.vue', () => {
     expect(wrapper.find('input[type="password"]').exists()).toBe(true)
   })
 
+  /**
+   * Tests two-way data binding.
+   * Verifies that user input correctly updates the component's internal state.
+   */
   it('updates ref values when user types in inputs', async () => {
     const wrapper = mount(LoginView, {
       global: { plugins: [router] },
@@ -43,6 +56,9 @@ describe('LoginView.vue', () => {
     expect((passwordInput.element as HTMLInputElement).value).toBe('password123')
   })
 
+  /**
+   * Ensures authentication errors from the store are visible to the user.
+   */
   it('displays error message from authStore', async () => {
     const authStore = useAuthStore()
     authStore.error = 'Invalid credentials'
@@ -54,6 +70,10 @@ describe('LoginView.vue', () => {
     expect(wrapper.find('.error-msg').text()).toContain('Invalid credentials')
   })
 
+  /**
+   * Checks UI feedback during network requests.
+   * The submit button should be disabled and show a loading state to prevent double submission.
+   */
   it('disables button and shows loading text when authStore is loading', () => {
     const authStore = useAuthStore()
     authStore.loading = true
@@ -67,6 +87,10 @@ describe('LoginView.vue', () => {
     expect(button.text()).toBe('Signing in...')
   })
 
+  /**
+   * Verifies the complete authentication workflow.
+   * Ensures that submitting the form triggers the store's login action and redirects on success.
+   */
   it('calls authStore.login and redirects on success', async () => {
     const authStore = useAuthStore()
     // Mock the login action to return true

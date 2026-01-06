@@ -1,10 +1,12 @@
 """
 Unit tests for static code analysis functionality.
 Tests reproducibility issue detection in R code.
+tests/unit/test_static_analysis.py
+
 """
 
 from django.test import TestCase
-from notebooks.static_analyzer import ReproducibilityAnalyzer
+from notebooks.services.static_analyzer import ReproducibilityAnalyzer
 
 
 class StaticAnalysisTest(TestCase):

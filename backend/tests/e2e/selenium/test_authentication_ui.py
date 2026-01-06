@@ -1,7 +1,7 @@
 """
 Complete Selenium E2E Tests for Reproducible Notebook Application
 Tests authentication, notebook CRUD, execution, and public/private visibility
-Location: tests/e2e/selenium/test_complete_workflows.py
+tests/e2e/selenium/test_complete_workflows.py
 """
 
 import os

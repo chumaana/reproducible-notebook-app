@@ -1,7 +1,7 @@
 """
 High Priority Frontend E2E Tests
 Tests for editor features, form validation, and error handling
-Location: tests/e2e/selenium/test_editor_forms_errors.py
+tests/e2e/selenium/test_editor_forms_errors.py
 """
 
 import os

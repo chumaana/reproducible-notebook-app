@@ -1,6 +1,8 @@
 """
 Unit tests for Django REST Framework serializers.
 Tests serialization/deserialization of notebook models.
+tests/unit/test_serializers.py
+
 """
 
 from django.test import TestCase

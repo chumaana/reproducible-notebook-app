@@ -1,3 +1,9 @@
+"""
+Unit tests for Django REST Framework serializers.
+Tests serialization/deserialization of notebook models.
+tests/unit/test_serializers.py
+"""
+
 from unittest.mock import patch, MagicMock, mock_open
 from django.test import TestCase
 from notebooks.services.storage_manager import StorageManager

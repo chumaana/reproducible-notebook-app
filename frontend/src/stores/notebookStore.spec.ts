@@ -1,8 +1,16 @@
 import { describe, it, expect, vi } from 'vitest'
 import { getErrorMessage, formatDateTime, debounce } from '@/utils/helpers'
 
+/**
+ * Test suite for utility functions.
+ * Validates error parsing logic, date formatting, and performance optimization helpers.
+ */
 describe('Utils - helpers', () => {
   describe('getErrorMessage', () => {
+    /**
+     * Test extraction of DRF 'detail' style errors.
+     * Common for authentication and permission errors.
+     */
     it('extracts error from axios error with detail', () => {
       const error = {
         isAxiosError: true,
@@ -13,6 +21,10 @@ describe('Utils - helpers', () => {
       expect(getErrorMessage(error)).toBe('Authentication failed')
     })
 
+    /**
+     * Test extraction of standard 'error' field.
+     * Common for generic API exceptions.
+     */
     it('extracts error from axios error with error field', () => {
       const error = {
         isAxiosError: true,
@@ -23,6 +35,10 @@ describe('Utils - helpers', () => {
       expect(getErrorMessage(error)).toBe('Invalid input')
     })
 
+    /**
+     * Test parsing of Django form validation errors.
+     * Should flatten object-based field errors into a readable string.
+     */
     it('extracts error from Django field errors', () => {
       const error = {
         isAxiosError: true,
@@ -33,12 +49,14 @@ describe('Utils - helpers', () => {
           },
         },
       }
-      // Expects joined string
       const msg = getErrorMessage(error)
       expect(msg).toContain('username: This field is required.')
       expect(msg).toContain('password: Too short.')
     })
 
+    /**
+     * Fallback mechanism check for generic JavaScript errors.
+     */
     it('handles non-axios errors', () => {
       const error = new Error('Something went wrong')
       expect(getErrorMessage(error)).toBe('Something went wrong')
@@ -46,27 +64,39 @@ describe('Utils - helpers', () => {
   })
 
   describe('formatDateTime', () => {
+    /**
+     * Verifies correct parsing of ISO strings into locale-aware formats.
+     */
     it('formats ISO date string with time', () => {
       const date = '2024-03-15T10:30:00Z'
       const formatted = formatDateTime(date)
 
-      // Check for basics (locale implementation may vary slightly by node version)
       expect(formatted).not.toBe('Invalid Date')
       expect(formatted).not.toBe('Unknown')
-      // Should likely contain the year
       expect(formatted).toContain('2024')
     })
 
+    /**
+     * Edge case: Handling missing input gracefully.
+     */
     it('returns "Unknown" for undefined', () => {
       expect(formatDateTime(undefined)).toBe('Unknown')
     })
 
+    /**
+     * Edge case: Handling malformed date strings.
+     */
     it('returns "Invalid date" for bad strings', () => {
       expect(formatDateTime('not-a-date')).toBe('Invalid Date')
     })
   })
 
   describe('debounce', () => {
+    /**
+     * Verifies execution limiting.
+     * Critical for performance (e.g., preventing API calls on every keystroke).
+     * Uses fake timers to simulate delay without slowing down tests.
+     */
     it('delays execution of function', () => {
       vi.useFakeTimers()
       const func = vi.fn()
@@ -77,13 +107,13 @@ describe('Utils - helpers', () => {
       debouncedFunc()
       debouncedFunc()
 
-      // Should not have been called yet
+      // Should not have been called yet (timer hasn't elapsed)
       expect(func).not.toHaveBeenCalled()
 
-      // Fast forward time
+      // Fast forward time past the delay
       vi.advanceTimersByTime(100)
 
-      // Should be called exactly once
+      // Should be called exactly once despite multiple triggers
       expect(func).toHaveBeenCalledTimes(1)
       vi.useRealTimers()
     })

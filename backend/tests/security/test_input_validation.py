@@ -75,7 +75,6 @@ class InputValidationTest(TestCase):
 
     def test_rate_limiting(self):
         """Test API rate limiting (informational)"""
-        # (Kept here or can be moved to test_rate_limiting.py if you make a 4th file)
         responses = []
         client = APIClient()  # Anonymous client
         for _ in range(100):

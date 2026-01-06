@@ -4,7 +4,7 @@ Concurrency and Race Condition Tests
 Tests parallel request handling, race conditions, and data integrity
 under concurrent access patterns.
 
-Location: backend/tests/performance/test_concurrency.py
+tests/performance/test_concurrency.py
 """
 
 import threading

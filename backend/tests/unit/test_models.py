@@ -1,6 +1,6 @@
 """
 Unit tests for Django models
-tests/test_models.py
+tests/unit/test_models.py
 """
 
 from django.test import TestCase

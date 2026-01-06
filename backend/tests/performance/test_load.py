@@ -4,10 +4,7 @@ Load and Stress Testing
 Tests system behavior under high load conditions.
 Measures degradation patterns and identifies breaking points.
 
-NOTE: These tests are expensive and slow. Run separately from unit/integration tests.
-Usage: pytest tests/performance/test_load.py -v -s
-
-Location: backend/tests/performance/test_load.py
+tests/performance/test_load.py
 """
 
 import time
