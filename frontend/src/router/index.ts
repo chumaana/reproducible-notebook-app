@@ -55,6 +55,15 @@ const routes: RouteRecordRaw[] = [
     },
   },
   {
+    path: '/notebook/new',
+    name: 'notebook-new',
+    component: () => import('@/views/NotebookEditor.vue'),
+    meta: {
+      title: 'Create New Notebook',
+      requiresAuth: true,
+    },
+  },
+  {
     path: '/notebook/:id',
     name: 'notebook-editor',
     component: () => import('@/views/NotebookEditor.vue'),
@@ -110,7 +119,6 @@ router.beforeEach((to, from, next) => {
   const requiresAuth = to.meta.requiresAuth as boolean
   const guestOnly = to.meta.guestOnly as boolean
   const isAuthenticated = authStore.isAuthenticated
-
   if (requiresAuth && !isAuthenticated) {
     // Redirect to login if authentication required
     next({
