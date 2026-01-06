@@ -27,7 +27,7 @@ This application enables researchers and data scientists to write R Markdown not
 
 ### Prerequisites
 
-- Docker 20.10+ and Docker Compose  5.0.0+
+- Docker 28.3.0 and Docker Compose  5.0.0+
 - 4GB RAM (8GB recommended)
 - 5GB free disk space
 
@@ -216,20 +216,5 @@ SELECT id, title, author_id FROM notebook_api_notebook;
 \q
 ```
 
-### Frontend
-
-```bash
-cd frontend
-
-# Install dependencies
-npm install
-
-# Start dev server
-npm run dev
-```
-
-Frontend runs at http://localhost:5173
-
----
 
 **Built with ❤️ for reproducible data science**
