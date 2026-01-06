@@ -19,6 +19,9 @@
 /**
  * Displays code with line numbers and highlights lines containing reproducibility issues.
  * Shows issue tooltips on hover with severity-based styling.
+ * 
+ * Note: Backend analyzer returns line numbers relative to R code block (without YAML header).
+ * We add RMARKDOWN_OFFSET to align with frontend display line numbers.
  */
 
 import { computed, ref } from 'vue'
@@ -35,14 +38,20 @@ const props = defineProps<{
 
 const hoveredLine = ref<number | null>(null)
 
+const RMARKDOWN_OFFSET = 5
+
 const lines = computed(() => props.code.split('\n'))
 
-// Map line numbers to their associated issues for quick lookup
+/**
+ * Map line numbers to their associated issues.
+ * Adjusts backend line numbers by adding RMARKDOWN_OFFSET to match frontend display.
+ */
 const issuesByLine = computed(() => {
   const map = new Map()
   props.issues.forEach(issue => {
     issue.lines?.forEach(lineInfo => {
-      map.set(lineInfo.line_number, issue)
+      const frontendLineNum = lineInfo.line_number - RMARKDOWN_OFFSET
+      map.set(frontendLineNum, issue)
     })
   })
   return map
@@ -51,14 +60,14 @@ const issuesByLine = computed(() => {
 /**
  * Returns CSS class based on issue severity.
  * 
- * @param lineNum - Line number to check
+ * @param lineNum - Frontend line number (1-indexed from start of file)
  * @returns Object with severity CSS class
  */
 function getLineClass(lineNum: number) {
   const issue = issuesByLine.value.get(lineNum)
   if (!issue) return ''
   return {
-    'line-error': issue.severity === 'high',
+    'line-error': issue.severity === 'high' || issue.severity === 'critical',
     'line-warning': issue.severity === 'medium',
     'line-info': issue.severity === 'low'
   }
@@ -67,7 +76,7 @@ function getLineClass(lineNum: number) {
 /**
  * Gets the issue associated with a specific line number.
  * 
- * @param lineNum - Line number to check
+ * @param lineNum - Frontend line number (1-indexed)
  * @returns Issue object or undefined
  */
 function getIssueForLine(lineNum: number) {

@@ -39,7 +39,7 @@ RUN apt-get update -y && apt-get -y install \
     libicu-dev pari-gp cmake make libglpk-dev libcairo2-dev \
     libproj-dev libgdal-dev gdal-bin libgeos-dev libsqlite3-dev \
     libudunits2-dev libmagick++-dev gsfonts unixodbc-dev \
-    linux-libc-dev libgmp3-dev libmpfr-dev
+    linux-libc-dev libgmp3-dev libmpfr-dev 
 
 
 RUN apt-get update && apt-get install -y \
@@ -47,6 +47,10 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/* 
 RUN R -e "install.packages('rmarkdown', repos='https://cran.rstudio.com/')"
 
+RUN curl -LO https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \
+    apt-get update && \
+    apt-get install -y ./google-chrome-stable_current_amd64.deb && \
+    rm google-chrome-stable_current_amd64.deb
 
 COPY --from=builder /usr/local/bin/r4r /usr/local/bin/r4r
 COPY libs/* /usr/local/lib/

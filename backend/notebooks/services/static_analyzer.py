@@ -86,6 +86,19 @@ class ReproducibilityAnalyzer:
                 }
             )
 
+        # Check for system(s) calls
+        system_lines = self._find_pattern_lines(lines, r"\b(system|system2)\s*\(")
+        if system_lines:
+            issues.append(
+                {
+                    "category": "system_calls",
+                    "severity": "high",
+                    "title": "System Command Execution",
+                    "details": "system() calls are not reproducible across environments.",
+                    "fix": "Avoid system commands or document dependencies.",
+                    "lines": system_lines,
+                }
+            )
         # Check for install.packages()
         install_lines = self._find_pattern_lines(lines, r"install\.packages\s*\(")
         if install_lines:
@@ -172,7 +185,7 @@ class ReproducibilityAnalyzer:
                 continue
             for pattern, func_name in random_patterns:
                 if re.search(pattern, line):
-                    found.append({"line_number": line_num - 6, "code": line.strip()})
+                    found.append({"line_number": line_num, "code": line.strip()})
         return found
 
     def _find_pattern_lines(self, lines: List[str], pattern: str) -> List[Dict]:
@@ -191,7 +204,7 @@ class ReproducibilityAnalyzer:
             if line.strip().startswith("#"):
                 continue
             if re.search(pattern, line):
-                found.append({"line_number": line_num - 6, "code": line.strip()})
+                found.append({"line_number": line_num, "code": line.strip()})
         return found
 
     def _find_absolute_paths(self, lines: List[str]) -> List[Dict]:
@@ -221,7 +234,7 @@ class ReproducibilityAnalyzer:
                 if "://" in match or "http" in match:
                     continue
                 found.append(
-                    {"line_number": line_num - 6, "code": line.strip(), "match": match}
+                    {"line_number": line_num, "code": line.strip(), "match": match}
                 )
         return found
 
@@ -247,5 +260,5 @@ class ReproducibilityAnalyzer:
             for p in patterns:
                 if re.search(p, line):
                     masked_code = re.sub(p, "***SECRET***", line.strip())
-                    found.append({"line_number": line_num - 6, "code": masked_code})
+                    found.append({"line_number": line_num, "code": masked_code})
         return found

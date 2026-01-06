@@ -605,3 +605,102 @@
 .fade-leave-to {
   opacity: 0;
 }
+
+.title-section {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.read-only-mode {
+  --editor-bg: #f8f9fa;
+  --editor-border: #dee2e6;
+}
+
+.read-only-banner {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.read-only-banner i {
+  font-size: 18px;
+}
+
+.read-only-banner .separator {
+  opacity: 0.5;
+}
+
+.notebook-title.read-only {
+  cursor: not-allowed;
+  background: #f8f9fa;
+  color: #6c757d;
+}
+
+.rmarkdown-editor:readonly,
+.rmarkdown-editor:disabled {
+  cursor: not-allowed;
+  background: #f8f9fa;
+  color: #495057;
+}
+.public-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.public-toggle input[type='checkbox'] {
+  display: none;
+}
+
+.toggle-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition: all 0.2s;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  color: #6b7280;
+}
+
+.toggle-label i {
+  font-size: 14px;
+}
+
+.public-toggle input:checked + .toggle-label {
+  background: #e7f5ff;
+  border-color: #4dabf7;
+  color: #1c7ed6;
+}
+
+.toggle-label:hover {
+  opacity: 0.8;
+  transform: translateY(-1px);
+}
+
+.toggle-label.private {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+  color: #6b7280;
+}
+
+.info-icon {
+  color: #9ca3af;
+  font-size: 0.875rem;
+  cursor: help;
+  transition: color 0.2s;
+}
+
+.info-icon:hover {
+  color: #6b7280;
+}

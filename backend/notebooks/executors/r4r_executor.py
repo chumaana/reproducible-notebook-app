@@ -1,9 +1,7 @@
 """
 R4R Executor for generating reproducibility packages.
-Uses the r4r tool to trace dependencies and build containerized environments.
 """
 
-import json
 import os
 import re
 import tarfile
@@ -29,21 +27,7 @@ class R4RExecutor(BaseExecutor):
     def execute(self, notebook_id: int) -> Dict[str, Any]:
         """
         Generate reproducibility package using r4r tool.
-
-        Args:
-            notebook_id: ID of the notebook to generate package for
-
-        Returns:
-            Dictionary containing:
-                - success: bool
-                - build_success: bool (whether r4r build succeeded)
-                - duration_seconds: float
-                - r4r_data: dict with packages, libs, files info
-                - dockerfile: str
-                - makefile: str
-                - manifest: dict
-                - logs: str
-                - package_ready: bool
+        Returns dictionary with success status, artifacts (dockerfile, makefile), and metrics.
         """
         start_time = time.time()
         self._log_header(f"GENERATING REPRODUCIBILITY PACKAGE - NOTEBOOK {notebook_id}")
@@ -60,15 +44,13 @@ class R4RExecutor(BaseExecutor):
             self._log_section("R4R TRACE & BUILD")
             r4r_output_dir = os.path.join(temp_dir, "r4r_output")
 
-            # Locate r4r binary
             r4r_binary = "/usr/local/bin/r4r"
             if not os.path.exists(r4r_binary):
                 r4r_binary = "/usr/bin/r4r"
 
-            # Set up environment for r4r
             env = os.environ.copy()
             env["HOME"] = "/home/r4r"
-            env["VISUAL"] = "/bin/true"
+            env["VISUAL"] = "/bin/true"  # Prevent interactive prompts
 
             r4r_cmd = [
                 r4r_binary,
@@ -81,11 +63,7 @@ class R4RExecutor(BaseExecutor):
             ]
 
             r4r_res = self._run_command(
-                cmd=r4r_cmd,
-                cwd=temp_dir,
-                env=env,
-                timeout=600,
-                desc="r4r Trace & Build",
+                cmd=r4r_cmd, cwd=temp_dir, env=env, desc="r4r Trace & Build"
             )
 
             if r4r_res.returncode != 0:
@@ -95,23 +73,18 @@ class R4RExecutor(BaseExecutor):
                     "logs": r4r_res.stdout + r4r_res.stderr,
                 }
 
-            # Collect metrics from r4r output
             r4r_data = self._collect_r4r_metrics(r4r_output_dir)
 
-            # Copy r4r output to notebook directory
             if os.path.exists(r4r_output_dir):
                 shutil.copytree(r4r_output_dir, final_dir, dirs_exist_ok=True)
 
-            # Copy container HTML output
             container_html = self.storage_manager.find_html_file(r4r_output_dir)
             if container_html:
                 shutil.copy(
                     container_html, os.path.join(final_dir, "notebook_container.html")
                 )
 
-            # Create downloadable ZIP package
             zip_path = self.storage_manager.create_zip(notebook_id)
-
             duration = time.time() - start_time
             self._log_header(f"PACKAGE GENERATION DONE ({duration:.2f}s)")
 
@@ -128,35 +101,24 @@ class R4RExecutor(BaseExecutor):
             }
 
     def _collect_r4r_metrics(self, r4r_output_dir: str) -> dict:
-        """
-        Collects metrics from r4r output and cleans system library names.
-
-        Args:
-            r4r_output_dir: Directory containing r4r output files
-
-        Returns:
-            Dictionary with r_packages, system_libs, and files_accessed counts
-        """
+        """Parses R packages, system libraries, and file access counts from output artifacts."""
         metrics = {"r_packages": [], "system_libs": [], "files_accessed": 0}
 
-        # Extract R packages from install script
+        # Parse R packages
         r_script = os.path.join(r4r_output_dir, "install_r_packages.R")
         if os.path.exists(r_script):
             with open(r_script, "r") as f:
-                content = f.read()
                 found = re.findall(
                     r"remotes::install_version\s*\(\s*['\"]([^'\"]+)['\"]\s*,\s*['\"]([^'\"]+)['\"]",
-                    content,
+                    f.read(),
                 )
                 metrics["r_packages"] = sorted(
                     [f"{name} ({ver})" for name, ver in found]
                 )
 
-        # Extract system libraries from Dockerfile
+        # Parse System Libraries
         dockerfile_path = os.path.join(r4r_output_dir, "Dockerfile")
         libs = set()
-
-        # Ignore noise words in apt-get install commands
         IGNORE_LIST = [
             "RUN",
             "apt-get",
@@ -175,39 +137,22 @@ class R4RExecutor(BaseExecutor):
 
         if os.path.exists(dockerfile_path):
             with open(dockerfile_path, "r") as f:
-                content = f.read()
+                content_flat = f.read().replace("\\\n", " ")
 
-            # Flatten multi-line commands
-            content_flat = content.replace("\\\n", " ")
-
-            # Extract packages from apt-get install commands
             matches = re.findall(
                 r"apt-get install.*?-y\s+(.*?)(?:&&|;|\n|$)", content_flat
             )
-
             for match in matches:
-                parts = match.split()
-                for part in parts:
-                    clean_part = part.strip()
-
-                    if (
-                        not clean_part
-                        or clean_part.startswith("-")
-                        or clean_part in IGNORE_LIST
-                    ):
+                for part in match.split():
+                    clean = part.strip()
+                    if not clean or clean.startswith("-") or clean in IGNORE_LIST:
                         continue
-
-                    # Remove architecture suffix (e.g., libblas3:amd64 -> libblas3)
-                    clean_part = clean_part.split(":")[0]
-
-                    # Remove version lock (e.g., pandoc=3.1.3 -> pandoc)
-                    clean_part = clean_part.split("=")[0]
-
-                    libs.add(clean_part)
+                    # Remove arch/version suffix (e.g. libxml2:amd64 or pandoc=2.0)
+                    libs.add(clean.split(":")[0].split("=")[0])
 
         metrics["system_libs"] = sorted(list(libs))
 
-        # Count files accessed during execution
+        # Count accessed files
         archive_path = os.path.join(r4r_output_dir, "archive.tar")
         if os.path.exists(archive_path):
             try:

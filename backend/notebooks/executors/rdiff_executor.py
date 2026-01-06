@@ -14,7 +14,7 @@ from ..services.storage_manager import StorageManager
 class RDiffExecutor(BaseExecutor):
     """
     Executor for generating semantic diff between local and container HTML outputs.
-    Uses the r-diff tool to compare execution results.
+    Uses the r-diff tool to visualize differences in outputs (plots, text, tables).
     """
 
     def __init__(self):
@@ -40,12 +40,14 @@ class RDiffExecutor(BaseExecutor):
         self._log_header(f"GENERATING SEMANTIC DIFF - NOTEBOOK {notebook_id}")
 
         final_dir = self.storage_manager.get_notebook_dir(notebook_id)
+
+        # Use absolute paths to prevent issues with CLI tools in temp directories
         local_html = os.path.abspath(os.path.join(final_dir, "notebook_local.html"))
         container_html = os.path.abspath(
             os.path.join(final_dir, "notebook_container.html")
         )
 
-        # Verify both HTML files exist
+        # Pre-flight checks: Verify input files and binary existence
         if not os.path.exists(local_html):
             return {
                 "success": False,
@@ -61,6 +63,7 @@ class RDiffExecutor(BaseExecutor):
         if not os.path.exists(self.rdiff_binary):
             return {"success": False, "error": "r-diff binary not found"}
 
+        # Execute r-diff in a temporary directory
         with tempfile.TemporaryDirectory(dir="/tmp") as temp_dir:
             diff_output = os.path.join(temp_dir, "semantic_diff.html")
 
@@ -75,6 +78,7 @@ class RDiffExecutor(BaseExecutor):
 
             diff_res = self._run_command(diff_cmd, cwd=temp_dir, desc="Running r-diff")
 
+            # Log raw output for debugging
             self._log(f"r-diff exit code: {diff_res.returncode}")
             self._log(f"r-diff stdout:\n{diff_res.stdout}")
             self._log(f"r-diff stderr:\n{diff_res.stderr}")
@@ -86,7 +90,7 @@ class RDiffExecutor(BaseExecutor):
                     "logs": diff_res.stdout + diff_res.stderr,
                 }
 
-            # Read and save diff HTML
+            # Persist the generated diff to the notebook directory
             diff_html_content = self.storage_manager.read_file(
                 temp_dir, "semantic_diff.html"
             )

@@ -5,6 +5,7 @@ REST Framework serializers for transforming models to/from JSON.
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import Notebook, ReproducibilityAnalysis, Execution
+from django.contrib.auth.password_validation import validate_password
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -87,6 +88,13 @@ class UserSerializer(serializers.ModelSerializer):
             return value
         if User.objects.filter(email=value).exists():
             raise serializers.ValidationError("Email is already in use")
+        return value
+
+    def validate_password(self, value):
+        """
+        Validate password using Django's settings.py AUTH_PASSWORD_VALIDATORS.
+        """
+        validate_password(value)  # <--- This triggers the strict checks
         return value
 
     def create(self, validated_data):
@@ -221,6 +229,10 @@ class NotebookSerializer(serializers.ModelSerializer):
             "updated_at",
             "analysis",
         ]
+        extra_kwargs = {
+            "title": {"required": True, "allow_blank": False},
+            "content": {"required": True, "allow_blank": False},
+        }
 
     def get_execution_count(self, obj):
         """
@@ -285,11 +297,20 @@ class NotebookSerializer(serializers.ModelSerializer):
 
         Returns:
             str: Original content unchanged.
+
+        Raises:
+            ValidationError: If content is empty or whitespace-only.
         """
+        if not value.strip():
+            raise serializers.ValidationError(
+                "Content cannot be empty or whitespace only"
+            )
+
         if value and len(value) > 10:
             r_indicators = ["```{r", "library(", "require("]
             if not any(indicator in value for indicator in r_indicators):
                 pass  # Soft validation
+
         return value
 
 

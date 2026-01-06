@@ -1,3 +1,14 @@
+<script setup lang="ts">
+/**
+ * HomeView Component.
+ * Serves as the primary landing page for the application.
+ * Highlights the reproducibility-as-a-service value proposition, 
+ * integrating key technical features like R4R dependency tracking, 
+ * RDiff validation, and Docker containerization.
+ */
+import { RouterLink } from 'vue-router'
+</script>
+
 <template>
   <div class="home-container">
     <section class="hero">
@@ -48,7 +59,6 @@
       </div>
     </section>
 
-    <!-- Problem/Solution -->
     <section class="problem-solution">
       <div class="container">
         <h2>Stop Fighting with Dependencies</h2>
@@ -163,10 +173,11 @@
       </div>
     </section>
 
-    <!-- How It Works -->
     <section class="how-it-works">
       <div class="container">
         <h2>Your Workflow</h2>
+
+
 
         <div class="workflow-steps">
           <div class="workflow-step">
@@ -232,7 +243,3 @@
     </section>
   </div>
 </template>
-
-<script setup lang="ts">
-import { RouterLink } from 'vue-router'
-</script>

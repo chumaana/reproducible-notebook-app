@@ -51,7 +51,7 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/NotebookList.vue'),
     meta: {
       title: 'My Notebooks',
-      requiresAuth: true,
+      requiresAuth: false,
     },
   },
   {
@@ -60,7 +60,7 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/NotebookEditor.vue'),
     meta: {
       title: 'Editor',
-      requiresAuth: true,
+      requiresAuth: false,
     },
   },
   {

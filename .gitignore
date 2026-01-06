@@ -4,12 +4,14 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
+.pytest_cache
 # Virtual Environments (Local)
 venv/
 .venv/
 env/
 .env
+.coverage
+htmlcov
 
 # Logs
 *.log

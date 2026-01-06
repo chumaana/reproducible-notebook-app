@@ -3,17 +3,22 @@ Django REST Framework views for notebook and user management.
 """
 
 from rest_framework import viewsets, status, permissions
-from rest_framework.decorators import action
+from rest_framework.decorators import (
+    action,
+    permission_classes as method_permission_classes,
+)
 from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
 from django.contrib.auth.models import User
 from django.http import HttpResponse, FileResponse
 from django.utils import timezone
+from django.db.models import Q
 import os
 import traceback
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.contrib.auth import authenticate
+
 
 from .models import Notebook, Execution, ReproducibilityAnalysis
 from .serializers import (
@@ -26,84 +31,51 @@ from .executors import RmdExecutor, R4RExecutor, RDiffExecutor
 
 
 class UserRegisterView(APIView):
-    """
-    User registration endpoint.
-
-    Handles new user registration and returns authentication token.
-    """
+    """User registration endpoint."""
 
     permission_classes = [AllowAny]
 
     def post(self, request):
-        """
-        Register a new user.
+        # Validate input and create new user with token
+        serializer = UserSerializer(data=request.data)
 
-        Args:
-            request: HTTP request with username, email, password in body.
+        if serializer.is_valid():
+            user = serializer.save()
+            token, _ = Token.objects.get_or_create(user=user)
 
-        Returns:
-            Response with token and user data, or error message.
-        """
-        username = request.data.get("username")
-        email = request.data.get("email")
-        password = request.data.get("password")
-
-        if not username or not email or not password:
             return Response(
-                {"error": "Please provide username, email and password"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if User.objects.filter(username=username).exists():
-            return Response(
-                {"error": "Username already exists"}, status=status.HTTP_400_BAD_REQUEST
-            )
-
-        if User.objects.filter(email=email).exists():
-            return Response(
-                {"error": "Email already exists"}, status=status.HTTP_400_BAD_REQUEST
-            )
-
-        user = User.objects.create_user(
-            username=username, email=email, password=password
-        )
-
-        token, _ = Token.objects.get_or_create(user=user)
-
-        return Response(
-            {
-                "token": token.key,
-                "user": {
-                    "id": user.id,
-                    "username": user.username,
-                    "email": user.email,
+                {
+                    "token": token.key,
+                    "user": {
+                        "id": user.id,
+                        "username": user.username,
+                        "email": user.email,
+                    },
                 },
-            },
-            status=status.HTTP_201_CREATED,
-        )
+                status=status.HTTP_201_CREATED,
+            )
+
+        # Return validation errors (weak password, duplicate username, etc.)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class UserLoginView(APIView):
-    """
-    User login endpoint.
-
-    Authenticates user and returns token.
-    """
+    """User login endpoint."""
 
     permission_classes = [AllowAny]
 
     def post(self, request):
-        """
-        Authenticate user and return token.
-
-        Args:
-            request: HTTP request with username and password.
-
-        Returns:
-            Response with token and user data, or error message.
-        """
         username = request.data.get("username")
         password = request.data.get("password")
+
+        # DEBUG LOGGING
+
+        # Check if user exists
+        try:
+            db_user = User.objects.get(username=username)
+
+        except User.DoesNotExist:
+            print(f"User '{username}' does NOT exist in database")
 
         if not username or not password:
             return Response(
@@ -111,6 +83,7 @@ class UserLoginView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Authenticate and return token
         user = authenticate(username=username, password=password)
 
         if user:
@@ -125,30 +98,37 @@ class UserLoginView(APIView):
                     },
                 }
             )
+
         return Response(
             {"error": "Invalid credentials"}, status=status.HTTP_400_BAD_REQUEST
         )
 
 
-class UserProfileView(APIView):
-    """
-    User profile management endpoint.
+class UserLogoutView(APIView):
+    """User logout endpoint."""
 
-    Allows viewing and updating user profile information.
-    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        # Delete authentication token to end session
+        try:
+            request.user.auth_token.delete()
+            return Response(
+                {"detail": "Successfully logged out."}, status=status.HTTP_200_OK
+            )
+        except Exception:
+            return Response(
+                {"detail": "Logout failed."}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class UserProfileView(APIView):
+    """User profile management endpoint."""
 
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        """
-        Get current user profile.
-
-        Args:
-            request: HTTP request with authenticated user.
-
-        Returns:
-            Response with user profile data.
-        """
+        # Return current user profile data
         user = request.user
         return Response(
             {
@@ -161,15 +141,7 @@ class UserProfileView(APIView):
         )
 
     def patch(self, request):
-        """
-        Update user profile.
-
-        Args:
-            request: HTTP request with profile fields to update.
-
-        Returns:
-            Response with updated user profile data.
-        """
+        # Update profile fields (partial update)
         user = request.user
         user.first_name = request.data.get("first_name", user.first_name)
         user.last_name = request.data.get("last_name", user.last_name)
@@ -187,51 +159,26 @@ class UserProfileView(APIView):
 
 
 class UserViewSet(viewsets.ModelViewSet):
-    """
-    User management ViewSet.
-
-    Provides registration and profile endpoints.
-    """
+    """User management ViewSet."""
 
     queryset = User.objects.all()
     serializer_class = UserSerializer
 
     def get_permissions(self):
-        """
-        Set permissions based on action.
-
-        Returns:
-            List of permission classes.
-        """
+        # Public registration, authenticated for other actions
         if self.action == "register":
             return [permissions.AllowAny()]
         return [permissions.IsAuthenticated()]
 
     @action(detail=False, methods=["get"])
     def me(self, request):
-        """
-        Get current user profile.
-
-        Args:
-            request: HTTP request.
-
-        Returns:
-            Response with serialized user data.
-        """
+        # Get current authenticated user
         serializer = self.get_serializer(request.user)
         return Response(serializer.data)
 
     @action(detail=False, methods=["post"])
     def register(self, request):
-        """
-        Register new user.
-
-        Args:
-            request: HTTP request with user data.
-
-        Returns:
-            Response with created user data or validation errors.
-        """
+        # Alternative registration endpoint
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
@@ -239,57 +186,96 @@ class UserViewSet(viewsets.ModelViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class NotebookViewSet(viewsets.ModelViewSet):
+class IsOwnerOrReadOnlyIfPublic(permissions.BasePermission):
     """
-    Notebook management ViewSet.
+    Custom permission:
+    - Owner can do anything
+    - Others can only read if public
+    """
 
-    Provides CRUD operations and reproducibility actions for notebooks.
-    Automatically filters notebooks by authenticated user.
-    """
+    def has_object_permission(self, request, view, obj):
+        # Allow read access for public notebooks
+        if request.method in permissions.SAFE_METHODS and obj.is_public:
+            return True
+        # Only owner can modify
+        return obj.author == request.user
+
+
+class NotebookViewSet(viewsets.ModelViewSet):
+    """Notebook management ViewSet."""
 
     serializer_class = NotebookSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    queryset = Notebook.objects.all()
+
+    def get_permissions(self):
+        # Public read access, authenticated write access
+        if self.action in ["retrieve", "list", "executions", "download"]:
+            return [AllowAny()]
+        return [IsAuthenticated(), IsOwnerOrReadOnlyIfPublic()]
 
     def get_queryset(self):
-        """
-        Get notebooks owned by current user.
+        """Get notebooks owned by current user OR that are public."""
+        # Eager load related data to prevent N+1 queries
+        base_qs = Notebook.objects.select_related("author").prefetch_related(
+            "executions", "analysis"
+        )
 
-        Returns:
-            QuerySet of notebooks filtered by author.
-        """
-        return Notebook.objects.filter(author=self.request.user).order_by("-updated_at")
+        user = self.request.user
+
+        if user.is_authenticated:
+            # Show owned + public notebooks
+            return (
+                base_qs.filter(Q(author=user) | Q(is_public=True))
+                .distinct()
+                .order_by("-updated_at")
+            )
+        else:
+            # Show only public notebooks for anonymous users
+            return base_qs.filter(is_public=True).order_by("-updated_at")
+
+    def retrieve(self, request, *args, **kwargs):
+        # Get single notebook with privacy check
+        notebook = self.get_object()
+
+        if not notebook.is_public:
+            if not request.user.is_authenticated:
+                return Response(
+                    {"error": "Authentication required"},
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
+            if notebook.author != request.user:
+                return Response(
+                    {"error": "This notebook is private"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        serializer = self.get_serializer(notebook)
+        return Response(serializer.data)
 
     def perform_create(self, serializer):
-        """
-        Auto-assign author when creating notebook.
-
-        Args:
-            serializer: NotebookSerializer instance.
-        """
+        # Set current user as author
         serializer.save(author=self.request.user)
 
     @action(detail=True, methods=["post"])
     def execute(self, request, pk=None):
-        """
-        Execute R Markdown notebook and perform static analysis.
-
-        Args:
-            request: HTTP request.
-            pk: Notebook primary key.
-
-        Returns:
-            Response with execution results or error.
-        """
+        # Execute R Markdown notebook and save results
         notebook = self.get_object()
-        print(f"DEBUG: Executing notebook {notebook.id}")
+
+        if notebook.author != request.user:
+            return Response(
+                {"error": "Only the owner can execute this notebook"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         execution = Execution.objects.create(notebook=notebook, status="running")
 
         try:
+            # Run knitr/rmarkdown
             executor = RmdExecutor()
             result = executor.execute(notebook.content, notebook.id)
 
             if result.get("success"):
+                # Save HTML output and mark completed
                 execution.html_output = result.get("html", "")
                 execution.status = "completed"
                 execution.completed_at = timezone.now()
@@ -306,6 +292,7 @@ class NotebookViewSet(viewsets.ModelViewSet):
                 )
                 return Response(result)
             else:
+                # Execution failed
                 execution.status = "failed"
                 execution.error_message = result.get("error", "Unknown error")
                 execution.completed_at = timezone.now()
@@ -313,6 +300,7 @@ class NotebookViewSet(viewsets.ModelViewSet):
                 return Response(result, status=status.HTTP_400_BAD_REQUEST)
 
         except Exception as e:
+            # Server error
             traceback.print_exc()
             execution.status = "failed"
             execution.error_message = str(e)
@@ -325,24 +313,22 @@ class NotebookViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def generate_package(self, request, pk=None):
-        """
-        Generate reproducibility package with Docker files.
-
-        Args:
-            request: HTTP request.
-            pk: Notebook primary key.
-
-        Returns:
-            Response with generation results or error.
-        """
+        # Generate reproducibility package using r4r
         notebook = self.get_object()
 
+        if notebook.author != request.user:
+            return Response(
+                {"error": "Only the owner can generate a package"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         try:
+            # Run r4r to trace dependencies
             executor = R4RExecutor()
             result = executor.execute(notebook.id)
 
             if result.get("success"):
-                # Save r4r analysis data
+                # Save Dockerfile, Makefile, and dependencies
                 ReproducibilityAnalysis.objects.update_or_create(
                     notebook=notebook,
                     defaults={
@@ -366,19 +352,17 @@ class NotebookViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def generate_diff(self, request, pk=None):
-        """
-        Generate semantic diff visualization.
-
-        Args:
-            request: HTTP request.
-            pk: Notebook primary key.
-
-        Returns:
-            Response with diff HTML or error.
-        """
+        # Generate rdiff comparison visualization
         notebook = self.get_object()
 
+        if notebook.author != request.user:
+            return Response(
+                {"error": "Only the owner can generate diff"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         try:
+            # Run rdiff binary
             executor = RDiffExecutor()
             result = executor.execute(notebook.id)
 
@@ -401,35 +385,31 @@ class NotebookViewSet(viewsets.ModelViewSet):
             )
 
     @action(detail=True, methods=["get"])
+    @method_permission_classes([AllowAny])
     def download(self, request, pk=None):
-        """
-        Download notebook as .Rmd file.
-
-        Args:
-            request: HTTP request.
-            pk: Notebook primary key.
-
-        Returns:
-            HttpResponse with .Rmd file attachment.
-        """
+        # Download notebook as .Rmd file
         notebook = self.get_object()
+
+        if not notebook.is_public:
+            if not request.user.is_authenticated or notebook.author != request.user:
+                return Response(
+                    {"error": "Access denied"}, status=status.HTTP_403_FORBIDDEN
+                )
+
         response = HttpResponse(notebook.content, content_type="text/plain")
         response["Content-Disposition"] = f'attachment; filename="{notebook.title}.Rmd"'
         return response
 
     @action(detail=True, methods=["get"])
     def download_package(self, request, pk=None):
-        """
-        Download reproducibility package as ZIP.
-
-        Args:
-            request: HTTP request.
-            pk: Notebook primary key.
-
-        Returns:
-            FileResponse with ZIP attachment or error.
-        """
+        # Download reproducibility package ZIP
         notebook = self.get_object()
+
+        if not notebook.is_public:
+            if not request.user.is_authenticated or notebook.author != request.user:
+                return Response(
+                    {"error": "Access denied"}, status=status.HTTP_403_FORBIDDEN
+                )
 
         try:
             zip_path = f"storage/notebooks/{notebook.id}/reproducibility_package.zip"
@@ -450,35 +430,57 @@ class NotebookViewSet(viewsets.ModelViewSet):
             return Response({"error": str(e)}, status=400)
 
     @action(detail=True, methods=["get"])
+    @method_permission_classes([AllowAny])
     def executions(self, request, pk=None):
-        """
-        Get execution history for notebook.
+        """Get execution history for notebook."""
+        try:
+            notebook = Notebook.objects.get(pk=pk)
+        except Notebook.DoesNotExist:
+            return Response(
+                {"error": "Notebook not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
-        Args:
-            request: HTTP request.
-            pk: Notebook primary key.
+        is_owner = request.user.is_authenticated and notebook.author == request.user
+        if not notebook.is_public and not is_owner:
+            if not request.user.is_authenticated:
+                return Response(
+                    {"error": "Authentication credentials were not provided."},
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
+            return Response(
+                {"error": "Access denied"}, status=status.HTTP_403_FORBIDDEN
+            )
 
-        Returns:
-            Response with list of executions.
-        """
-        notebook = self.get_object()
-        executions = Execution.objects.filter(notebook=notebook).order_by("-started_at")
+        # Fetch execution history with notebook data
+        executions = (
+            notebook.executions.all().select_related("notebook").order_by("-started_at")
+        )
+
         serializer = ExecutionSerializer(executions, many=True)
         return Response(serializer.data)
 
     @action(detail=True, methods=["get"])
+    @method_permission_classes([AllowAny])
     def reproducibility(self, request, pk=None):
-        """
-        Get reproducibility analysis data.
+        # Get reproducibility analysis data
+        try:
+            notebook = Notebook.objects.get(pk=pk)
+        except Notebook.DoesNotExist:
+            return Response(
+                {"error": "Notebook not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
-        Args:
-            request: HTTP request.
-            pk: Notebook primary key.
+        is_owner = request.user.is_authenticated and notebook.author == request.user
+        if not notebook.is_public and not is_owner:
+            if not request.user.is_authenticated:
+                return Response(
+                    {"error": "Authentication required"},
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
+            return Response(
+                {"error": "Access denied"}, status=status.HTTP_403_FORBIDDEN
+            )
 
-        Returns:
-            Response with analysis data or error.
-        """
-        notebook = self.get_object()
         try:
             serializer = ReproducibilityAnalysisSerializer(notebook.analysis)
             return Response(serializer.data)
@@ -489,46 +491,50 @@ class NotebookViewSet(viewsets.ModelViewSet):
         except Exception:
             return Response({"status": "no_analysis"}, status=200)
 
+    @action(detail=True, methods=["post"])
+    def toggle_public(self, request, pk=None):
+        # Toggle notebook public/private visibility
+        notebook = self.get_object()
+        if notebook.author != request.user:
+            return Response(
+                {"error": "Only the owner can change public status"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        notebook.is_public = not notebook.is_public
+        notebook.save()
+        return Response(
+            {
+                "is_public": notebook.is_public,
+                "message": f'Notebook is now {"public" if notebook.is_public else "private"}',
+            }
+        )
+
 
 class ExecutionViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    Read-only ViewSet for execution records.
-
-    Filtered by authenticated user's notebooks.
-    """
+    """Read-only ViewSet for execution records."""
 
     serializer_class = ExecutionSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        """
-        Get executions for current user's notebooks.
-
-        Returns:
-            QuerySet of executions filtered by notebook author.
-        """
-        return Execution.objects.filter(notebook__author=self.request.user).order_by(
-            "-started_at"
+        """Get executions for current user's notebooks."""
+        # Fetch execution records with related notebook data
+        return (
+            Execution.objects.filter(notebook__author=self.request.user)
+            .select_related("notebook", "notebook__author")
+            .order_by("-started_at")
         )
 
 
 class ReproducibilityAnalysisViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    Read-only ViewSet for reproducibility analyses.
-
-    Filtered by authenticated user's notebooks.
-    """
+    """Read-only ViewSet for reproducibility analyses."""
 
     serializer_class = ReproducibilityAnalysisSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        """
-        Get analyses for current user's notebooks.
-
-        Returns:
-            QuerySet of analyses filtered by notebook author.
-        """
+        # Get analyses for current user's notebooks
         return ReproducibilityAnalysis.objects.filter(
             notebook__author=self.request.user
         )
