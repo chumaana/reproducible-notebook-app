@@ -2,9 +2,13 @@
 
 A web platform for creating, executing, and analyzing R Markdown notebooks with automated reproducibility tooling.
 
-![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
-![Vue](https://img.shields.io/badge/vue-3.x-green.svg)
-![Docker](https://img.shields.io/badge/docker-required-blue.svg)
+![Python](https://img.shields.io/badge/python-3.12-blue.svg)
+![Vue](https://img.shields.io/badge/vue-3.5.22-green.svg)
+![Django](https://img.shields.io/badge/django-5.2.9-green.svg)
+![TypeScript](https://img.shields.io/badge/typescript-5.9.0-blue.svg)
+![Docker](https://img.shields.io/badge/docker-28.3.0-blue.svg)
+![PostgreSQL](https://img.shields.io/badge/postgresql-18-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
 ---
 
