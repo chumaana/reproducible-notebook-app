@@ -30,7 +30,7 @@ This application enables researchers and data scientists to write R Markdown not
 
 ### Prerequisites
 
-- Docker 28.3.0 and Docker Compose  5.0.0+
+- Docker 28.3.0 and Docker Compose 5.0.0+
 - 4GB RAM (8GB recommended)
 - 5GB free disk space
 
@@ -196,7 +196,7 @@ The database is **automatically configured** when running `docker compose up`:
 - PostgreSQL 18 container starts with health checks
 - Database `notebooks` is created on first run
 - Django migrations execute via `entrypoint.sh`
-- **No manual setup required** 
+- **No manual setup required**
 
 ### Verify Database
 
@@ -213,11 +213,10 @@ docker compose exec db psql -U postgres -d notebooks
 \dt
 
 # View notebooks
-SELECT id, title, author_id FROM notebook_api_notebook;
+SELECT id, title, author_id FROM notebooks_notebook;
 
 # Exit
 \q
 ```
-
 
 **Built with ❤️ for reproducible data science**
