@@ -1,0 +1,224 @@
+<script setup lang="ts">
+/**
+ * NotebookList Component.
+ * * Acts as the primary content hub. It dynamically switches between two modes 
+ * based on the authentication state:
+ * 1. Personal Dashboard: Allows authenticated users to manage, filter, and 
+ * delete their own notebooks.
+ * 2. Community Feed: Provides a read-only view of all notebooks marked as 
+ * 'public' by other researchers.
+ * * Features integrated include status badges (Public/Private), reactive 
+ * tab-based filtering, and dynamic empty-state handling.
+ */
+
+import { ref, onMounted, computed } from 'vue'
+import { useRouter, RouterLink } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import api from '@/services/api'
+import type { Notebook } from '@/types/index'
+
+const router = useRouter()
+const authStore = useAuthStore()
+
+/** @type {import('vue').Ref<Notebook[]>} Internal state for fetched records */
+const notebooks = ref<Notebook[]>([])
+
+/** @type {import('vue').Ref<boolean>} UI loading state during API calls */
+const loading = ref(false)
+
+/** @type {import('vue').Ref<string>} Current active filter for the user's workspace */
+const filterType = ref<'all' | 'public' | 'private'>('all')
+
+/** Accesses the global auth state to determine view mode */
+const isAuthenticated = computed(() => authStore.isAuthenticated)
+
+/**
+ * Reactive Filtering Logic.
+ * Returns a subset of notebooks based on visibility settings. 
+ * Public feeds are returned in full, while personal feeds are filtered locally.
+ * @returns {Notebook[]}
+ */
+const filteredNotebooks = computed(() => {
+    if (!isAuthenticated.value) {
+        return notebooks.value
+    }
+
+    switch (filterType.value) {
+        case 'public':
+            return notebooks.value.filter(n => n.is_public === true)
+        case 'private':
+            return notebooks.value.filter(n => n.is_public === false)
+        default:
+            return notebooks.value
+    }
+})
+
+/** Computed counts for UI tabs to provide immediate feedback on workspace size */
+const publicCount = computed(() => {
+    return notebooks.value.filter(n => n.is_public === true).length
+})
+
+const privateCount = computed(() => {
+    return notebooks.value.filter(n => n.is_public === false).length
+})
+
+/**
+ * Dynamic Content Management for Empty States.
+ * Enhances UX by providing context-specific instructions when no notebooks are found.
+ */
+const emptyStateTitle = computed(() => {
+    if (!isAuthenticated.value) {
+        return 'No public notebooks yet'
+    }
+    switch (filterType.value) {
+        case 'public': return 'No public notebooks'
+        case 'private': return 'No private notebooks'
+        default: return 'No notebooks yet'
+    }
+})
+
+const emptyStateMessage = computed(() => {
+    if (!isAuthenticated.value) {
+        return 'Check back later for shared notebooks'
+    }
+    switch (filterType.value) {
+        case 'public': return 'Make a notebook public to share it with others'
+        case 'private': return 'All your notebooks are currently public'
+        default: return 'Create your first notebook to get started'
+    }
+})
+
+/**
+ * Data Fetching Strategy.
+ * Selects the appropriate API endpoint based on identity.
+ * Authenticated users fetch their own (private + public) records, 
+ * while guests fetch global public records.
+ */
+const loadNotebooks = async () => {
+    loading.value = true
+    try {
+        if (isAuthenticated.value) {
+            const data = await api.getNotebooks()
+            notebooks.value = data
+        } else {
+            const data = await api.getPublicNotebooks()
+            notebooks.value = data
+        }
+    } catch (error) {
+        console.error('Error loading notebooks:', error)
+    } finally {
+        loading.value = false
+    }
+}
+
+/** Navigates to the editor view */
+const openNotebook = (id: number) => {
+    router.push(`/notebook/${id}`)
+}
+
+/**
+ * Deletion Workflow.
+ * Implements a guard with a native confirmation dialog before 
+ * performing destructive server-side operations.
+ */
+const deleteNotebook = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this notebook?')) return
+
+    try {
+        await api.deleteNotebook(id)
+        // Optimistic UI update: Remove from local array without full re-fetch
+        notebooks.value = notebooks.value.filter((n) => n.id !== id)
+    } catch (error) {
+        console.error('Error deleting notebook:', error)
+    }
+}
+
+/**
+ * Utility: Human-readable date formatting.
+ * Converts ISO timestamps into a localized short-date format.
+ */
+const formatDate = (dateString?: string) => {
+    if (!dateString) return 'Unknown'
+    const date = new Date(dateString)
+    return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+    })
+}
+
+onMounted(() => {
+    loadNotebooks()
+})
+</script>
+
+<template>
+    <div class="notebooks-page">
+        <div class="container">
+            <div class="page-header">
+                <div>
+                    <h1>{{ isAuthenticated ? 'My Notebooks' : 'Public Notebooks' }}</h1>
+                    <p class="page-description">
+                        {{ isAuthenticated ? 'Manage and organize your R notebooks' : 'Explore notebooks shared by the community' }}
+                    </p>
+                </div>
+                <RouterLink v-if="isAuthenticated" to="/notebook/new" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> New Notebook
+                </RouterLink>
+            </div>
+
+            <div v-if="isAuthenticated" class="filter-tabs">
+                <button @click="filterType = 'all'" :class="['filter-tab', { active: filterType === 'all' }]">
+                    <i class="fas fa-list"></i> All ({{ notebooks.length }})
+                </button>
+                <button @click="filterType = 'public'" :class="['filter-tab', { active: filterType === 'public' }]">
+                    <i class="fas fa-globe"></i> Public ({{ publicCount }})
+                </button>
+                <button @click="filterType = 'private'" :class="['filter-tab', { active: filterType === 'private' }]">
+                    <i class="fas fa-lock"></i> Private ({{ privateCount }})
+                </button>
+            </div>
+
+            <div v-if="loading" class="loading-state">
+                <div class="spinner"></div>
+                <p>Loading notebooks...</p>
+            </div>
+
+            <div v-else-if="filteredNotebooks.length === 0" class="empty-state">
+                <i class="fas fa-folder-open"></i>
+                <h2>{{ emptyStateTitle }}</h2>
+                <p>{{ emptyStateMessage }}</p>
+            </div>
+
+            <div v-else class="notebooks-grid">
+                <div v-for="notebook in filteredNotebooks" :key="notebook.id" class="notebook-card"
+                    @click="openNotebook(notebook.id!)">
+                    <div class="notebook-card-header">
+                        <div class="title-with-badge">
+                            <h3>{{ notebook.title }}</h3>
+                            <span v-if="notebook.is_public" class="public-badge" title="Public notebook">
+                                <i class="fas fa-globe"></i>
+                            </span>
+                            <span v-else-if="isAuthenticated" class="private-badge" title="Private notebook">
+                                <i class="fas fa-lock"></i>
+                            </span>
+                        </div>
+                        <div v-if="isAuthenticated" class="notebook-actions">
+                            <button @click.stop="deleteNotebook(notebook.id!)" class="btn-icon btn-danger">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="notebook-card-body">
+                        <div class="notebook-meta">
+                            <span class="meta-item"><i class="fas fa-user"></i> {{ notebook.author || 'Unknown'
+                            }}</span>
+                            <span class="meta-item"><i class="fas fa-clock"></i> {{ formatDate(notebook.updated_at)
+                            }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>

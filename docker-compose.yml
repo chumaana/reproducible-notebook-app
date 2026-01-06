@@ -1,0 +1,43 @@
+services:
+  backend:
+    build: ./backend
+    ports: ["8000:8000"]
+    volumes:
+      - ./backend:/app
+      - storage_volume:/app/storage
+      - /var/run/docker.sock:/var/run/docker.sock
+    env_file: backend/.env
+    environment:
+      - FRONTEND_URL=http://frontend:5173 
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    depends_on:
+      db:
+        condition: service_healthy
+  frontend:
+    build: ./frontend
+    ports: ["5173:5173"]
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on: [backend]
+
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: notebooks
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  storage_volume:
+  postgres_data:
