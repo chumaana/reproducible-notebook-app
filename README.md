@@ -8,7 +8,6 @@ A web platform for creating, executing, and analyzing R Markdown notebooks with 
 ![TypeScript](https://img.shields.io/badge/typescript-5.9.0-blue.svg)
 ![Docker](https://img.shields.io/badge/docker-28.3.0-blue.svg)
 ![PostgreSQL](https://img.shields.io/badge/postgresql-18-blue.svg)
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
 ---
 
