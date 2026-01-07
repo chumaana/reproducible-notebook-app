@@ -219,4 +219,29 @@ SELECT id, title, author_id FROM notebooks_notebook;
 \q
 ```
 
-**Built with ❤️ for reproducible data science**
+## Testing
+
+The application includes automated test suites for both the Django backend and Vue frontend.
+
+### Backend Tests (Django)
+
+**1. Run all tests**
+
+```bash
+docker compose exec backend python manage.py test
+```
+**2. Run specific test module**
+
+```bash
+# Example: Run only unit tests
+docker compose exec backend python manage.py test tests.unit
+```
+
+
+### Frontend Tests (Vue)
+
+**1. Run all tests**
+
+```bash
+docker compose exec frontend npm test
+```
