@@ -331,14 +331,15 @@ class ReproducibilityEndpointResponseTimeTest(TestCase):
         self.client = APIClient()
         self.user = User.objects.create_user(username="testuser", password="testpass")
         self.client.force_authenticate(user=self.user)
+        self.notebook = Notebook.objects.create(
+            title="Download Test", content="# R Code\nprint('hello')", author=self.user
+        )
 
     def test_reproducibility_endpoint_response_time(self):
         """Reproducibility data should load quickly"""
-        notebook = Notebook.objects.create(
-            title="Test", content="# Test", author=self.user
-        )
+
         ReproducibilityAnalysis.objects.create(
-            notebook=notebook,
+            notebook=self.notebook,
             dependencies=["dplyr", "ggplot2"],
             system_deps=["libcurl"],
             dockerfile="FROM r-base:latest",
@@ -346,7 +347,9 @@ class ReproducibilityEndpointResponseTimeTest(TestCase):
         )
 
         start = time.time()
-        response = self.client.get(f"/api/notebooks/{notebook.id}/reproducibility/")
+        response = self.client.get(
+            f"/api/notebooks/{self.notebook.id}/reproducibility/"
+        )
         duration = time.time() - start
 
         self.assertEqual(response.status_code, 200)
@@ -354,6 +357,26 @@ class ReproducibilityEndpointResponseTimeTest(TestCase):
             duration,
             ResponseTimeThresholds.DETAIL,
             f"Reproducibility took {duration:.3f}s (threshold: {ResponseTimeThresholds.DETAIL}s)",
+        )
+
+    def test_download_rmd_response_time(self):
+        """
+        Test downloading the raw .Rmd source file.
+        This simply streams the 'content' field as a file.
+        """
+
+        start = time.time()
+        response = self.client.get(f"/api/notebooks/{self.notebook.id}/download/")
+        duration = time.time() - start
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.has_header("Content-Disposition"))
+        self.assertEqual(response.get("Content-Type"), "text/plain")
+
+        self.assertLess(
+            duration,
+            ResponseTimeThresholds.DOWNLOAD,
+            f"Rmd download took {duration:.3f}s",
         )
 
 
@@ -391,6 +414,7 @@ class PerformanceSummaryTest(TestCase):
             ("PATCH", f"/api/notebooks/{self.notebook.id}/", "Update notebook"),
             ("GET", f"/api/notebooks/{self.notebook.id}/executions/", "Get executions"),
             ("GET", "/api/auth/profile/", "Get profile"),
+            ("GET", f"/api/notebooks/{self.notebook.id}/download/", "Download Rmd"),
         ]
 
         print("\n" + "=" * 60)
