@@ -127,8 +127,13 @@ const handlePublicToggle = async () => {
 const handleSave = async () => {
     if (isReadOnly.value) return
     const savedId = await store.save()
-    if (savedId && route.params.id === 'new') {
-        router.push(`/notebook/${savedId}`)
+    const isNewNotebook = route.name === 'notebook-new';
+    // console.log(savedId)
+    if (savedId && isNewNotebook) {
+        await router.push({
+            name: 'notebook-editor',
+            params: { id: savedId.toString() }
+        })
         notebook.value.id = savedId
     }
 }
